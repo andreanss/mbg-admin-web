@@ -7,7 +7,42 @@ from datetime import datetime, timedelta
 # ==========================================
 # 1. KONFIGURASI HALAMAN WEB
 # ==========================================
-st.set_page_config(page_title="LEUIT JAYA JAYA JAYA!", page_icon="🍲", layout="wide")
+# Menambahkan perintah agar sidebar otomatis terbuka dari awal
+st.set_page_config(page_title="LEUIT JAYA JAYA JAYA!", page_icon="🍲", layout="wide", initial_sidebar_state="expanded")
+
+# --- SIHIR CSS UNTUK MEROMBAK TOMBOL SIDEBAR ---
+st.markdown("""
+    <style>
+        /* Modifikasi tombol buka sidebar (saat tertutup) agar sangat jelas */
+        [data-testid="collapsedControl"] {
+            display: flex;
+            align-items: center;
+            background-color: #ff4b4b;
+            border-radius: 5px;
+            padding: 5px 15px;
+            margin-top: 10px;
+            margin-left: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: 0.3s;
+            width: auto;
+        }
+        /* Sembunyikan ikon panah default */
+        [data-testid="collapsedControl"] svg {
+            display: none;
+        }
+        /* Ganti dengan teks dan logo kustom */
+        [data-testid="collapsedControl"]::after {
+            content: "➔ 🔍 Buka Pencarian";
+            font-weight: bold;
+            font-size: 14px;
+            color: white;
+        }
+        [data-testid="collapsedControl"]:hover {
+            background-color: #e03e3e;
+            cursor: pointer;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 2. SISTEM KEAMANAN & ANTI-HACKING
@@ -201,24 +236,20 @@ with col_logout:
             st.session_state.clear()
             st.rerun()
 
-# --- SIDEBAR: PENCARIAN GLOBAL ---
-st.sidebar.title("🔍 Pencarian Area")
-st.sidebar.caption("Filter data untuk semua mode. Kosongkan untuk melihat semua data.")
-cari_kota = st.sidebar.text_input("🏢 Kota / Kabupaten").strip()
-cari_kec = st.sidebar.text_input("🏘️ Kecamatan").strip()
-cari_kel = st.sidebar.text_input("🏠 Kelurahan").strip()
+# --- SIDEBAR: PENCARIAN GLOBAL OMNIBOX ---
+st.sidebar.title("🔍 Pencarian Global")
+st.sidebar.caption("Ketik area, nama yayasan, atau ID SPPG untuk memfilter seluruh data.")
+kata_kunci = st.sidebar.text_input("🔎 Masukkan kata kunci...").strip()
 
 try:
     df_master = ambil_data_master()
     
-    # Menerapkan Filter Pencarian Global
-    if not df_master.empty:
-        if cari_kota and 'kota_kabupaten' in df_master.columns:
-            df_master = df_master[df_master['kota_kabupaten'].astype(str).str.contains(cari_kota, case=False, na=False)]
-        if cari_kec and 'kecamatan' in df_master.columns:
-            df_master = df_master[df_master['kecamatan'].astype(str).str.contains(cari_kec, case=False, na=False)]
-        if cari_kel and 'kelurahan' in df_master.columns:
-            df_master = df_master[df_master['kelurahan'].astype(str).str.contains(cari_kel, case=False, na=False)]
+    # Menerapkan Filter Pencarian Global Universal
+    if not df_master.empty and kata_kunci:
+        mask = pd.Series([False] * len(df_master))
+        for col in df_master.columns:
+            mask = mask | df_master[col].astype(str).str.contains(kata_kunci, case=False, na=False)
+        df_master = df_master[mask]
 
     if "pending_delete_ids" in st.session_state and st.session_state["pending_delete_ids"]:
         tampilkan_konfirmasi_hapus(st.session_state["pending_delete_ids"])
