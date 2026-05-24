@@ -1,0 +1,6 @@
+streamlit
+pandas
+libsql-client
+folium
+streamlit-folium
+geopy
