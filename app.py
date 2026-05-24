@@ -201,8 +201,25 @@ with col_logout:
             st.session_state.clear()
             st.rerun()
 
+# --- SIDEBAR: PENCARIAN GLOBAL ---
+st.sidebar.title("🔍 Pencarian Area")
+st.sidebar.caption("Filter data untuk semua mode. Kosongkan untuk melihat semua data.")
+cari_kota = st.sidebar.text_input("🏢 Kota / Kabupaten").strip()
+cari_kec = st.sidebar.text_input("🏘️ Kecamatan").strip()
+cari_kel = st.sidebar.text_input("🏠 Kelurahan").strip()
+
 try:
     df_master = ambil_data_master()
+    
+    # Menerapkan Filter Pencarian Global
+    if not df_master.empty:
+        if cari_kota and 'kota_kabupaten' in df_master.columns:
+            df_master = df_master[df_master['kota_kabupaten'].astype(str).str.contains(cari_kota, case=False, na=False)]
+        if cari_kec and 'kecamatan' in df_master.columns:
+            df_master = df_master[df_master['kecamatan'].astype(str).str.contains(cari_kec, case=False, na=False)]
+        if cari_kel and 'kelurahan' in df_master.columns:
+            df_master = df_master[df_master['kelurahan'].astype(str).str.contains(cari_kel, case=False, na=False)]
+
     if "pending_delete_ids" in st.session_state and st.session_state["pending_delete_ids"]:
         tampilkan_konfirmasi_hapus(st.session_state["pending_delete_ids"])
 
@@ -246,7 +263,7 @@ try:
                     df_slots = pd.DataFrame(data_slot).sort_values(by='Sisa Slot Kosong', ascending=False).reset_index(drop=True)
                     st.dataframe(df_slots, use_container_width=True)
                 else:
-                    st.success("Semua yayasan saat ini sudah terisi penuh (10 slot).")
+                    st.success("Semua yayasan pada pencarian ini sudah terisi penuh (10 slot).")
 
             with col_dash2:
                 st.subheader("📍 Rincian Status per Provinsi")
@@ -267,9 +284,9 @@ try:
                     df_prov_stat = pd.DataFrame(prov_list).sort_values(by="Provinsi").reset_index(drop=True)
                     st.dataframe(df_prov_stat, use_container_width=True)
                 else:
-                    st.info("Belum ada data dengan status tersebut di provinsi manapun.")
+                    st.info("Belum ada data dengan status tersebut di pencarian ini.")
         else:
-            st.warning("Database Turso kosong. Silakan import data terlebih dahulu.")
+            st.warning("Data tidak ditemukan atau Database Turso kosong. Silakan periksa kata kunci pencarian atau import data terlebih dahulu.")
 
     if not df_master.empty:
         # --- TAB 2: MODE JOHAN ---
@@ -406,13 +423,11 @@ try:
         
         if file_upload is not None:
             try:
-                # Membaca format file secara dinamis
                 if file_upload.name.endswith('.csv'):
                     df_import = pd.read_csv(file_upload)
                 else:
                     df_import = pd.read_excel(file_upload)
                 
-                # Standarisasi tipe data menghindari Null/NaN
                 df_import = df_import.fillna('').astype(str)
                 
                 st.write(f"🔍 **Preview Data:** Ditemukan {len(df_import)} baris siap di-import.")
@@ -420,7 +435,6 @@ try:
                 
                 kolom_file = list(df_import.columns)
                 
-                # Validasi minimal ada ID SPPG untuk menghindari data rusak
                 if "id_sppg" not in kolom_file:
                     st.error("⚠️ Proses ditolak: Kolom 'id_sppg' tidak ditemukan di dalam file. Pastikan nama header kolom di file hasil scraping Anda sudah benar.")
                 else:
@@ -446,7 +460,6 @@ try:
                                         except Exception as e:
                                             gagal += 1
                                             
-                            # Catat Riwayat
                             catat_log("IMPORT BULK SCRAPING", f"Upload file {file_upload.name} | Sukses: {sukses} baris | Gagal/Duplikat: {gagal} baris")
                             
                             if sukses > 0:
