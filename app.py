@@ -37,14 +37,16 @@ def cek_login():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             with st.form("form_login"):
-                email = st.text_input("📧 Email Admin")
+                # Diubah agar lebih universal (bisa nama akun atau email)
+                username = st.text_input("👤 Username / Email")
                 password = st.text_input("🔑 Password", type="password")
                 submit = st.form_submit_button("Masuk ke Dashboard", use_container_width=True)
                 
                 if submit:
-                    if email == st.secrets["ADMIN_EMAIL"] and password == st.secrets["ADMIN_PASSWORD"]:
+                    # Mengecek apakah username ada di daftar rahasia, dan apakah passwordnya cocok
+                    if username in st.secrets["users"] and password == st.secrets["users"][username]:
                         st.session_state["logged_in"] = True
-                        st.session_state["admin_email"] = email
+                        st.session_state["admin_email"] = username
                         st.session_state["failed_attempts"] = 0
                         st.rerun()
                     else:
@@ -57,7 +59,7 @@ def cek_login():
                             st.rerun()
                         else:
                             sisa = 3 - st.session_state["failed_attempts"]
-                            st.error(f"❌ Email atau Password salah! (Sisa percobaan: {sisa})")
+                            st.error(f"❌ Username atau Password salah! (Sisa percobaan: {sisa})")
         return False
     return True
 
