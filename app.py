@@ -6,32 +6,61 @@ import libsql_client
 # 1. KONFIGURASI HALAMAN WEB
 # ==========================================
 st.set_page_config(page_title="Admin Panel MBG", page_icon="🍲", layout="wide")
-st.title("🎛️ Dashboard - Leuit")
 
 # ==========================================
-# 2. KONEKSI TURSO CLOUD (MENGGUNAKAN HTTPS)
+# 2. SISTEM KEAMANAN (LOGIN)
+# ==========================================
+def cek_login():
+    # Jika status login belum ada, set jadi False
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
+
+    # Jika belum login, tampilkan form
+    if not st.session_state["logged_in"]:
+        st.title("🔒 Gerbang Keamanan MBG")
+        st.write("Silakan masukkan kredensial Anda untuk mengakses database admin.")
+        
+        # Buat kotak form di tengah layar
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            with st.form("form_login"):
+                email = st.text_input("📧 Email Admin")
+                password = st.text_input("🔑 Password", type="password")
+                submit = st.form_submit_button("Masuk ke Dashboard", use_container_width=True)
+                
+                if submit:
+                    # Cocokkan dengan data di brankas Streamlit Secrets
+                    if email == st.secrets["ADMIN_EMAIL"] and password == st.secrets["ADMIN_PASSWORD"]:
+                        st.session_state["logged_in"] = True
+                        st.rerun() # Muat ulang halaman
+                    else:
+                        st.error("❌ Email atau Password salah!")
+        return False
+    return True
+
+# Hentikan eksekusi kode ke bawah jika belum login
+if not cek_login():
+    st.stop()
+
+# ==========================================
+# 3. KONEKSI TURSO CLOUD & AMBIL DATA
 # ==========================================
 URL = "https://mbg-db-andreanss.aws-ap-northeast-1.turso.io"
-# Token sekarang ditarik dari brankas rahasia Streamlit, bukan ditulis langsung!
 TOKEN = st.secrets["TURSO_TOKEN"]
 
 @st.cache_data(ttl=5)
 def ambil_data_master():
-    # Menggunakan library baru lewat jalur aman HTTPS
     client = libsql_client.create_client_sync(url=URL, auth_token=TOKEN)
     hasil = client.execute("SELECT * FROM master_sppg")
     client.close()
     
-    # Jika database kosong
     if not hasil.rows:
         return pd.DataFrame()
         
-    # Konversi hasil Turso ke format list biasa, lalu jadikan DataFrame Pandas
     baris_data = [list(row) for row in hasil.rows]
     df = pd.DataFrame(baris_data, columns=hasil.columns)
     
     if not df.empty:
-        # PENGAMAN ANTI-CRASH MIXED DATA TYPE
         df = df.fillna('')
         df = df.astype(str)
         df['status'] = df['status'].str.strip()
@@ -40,8 +69,17 @@ def ambil_data_master():
     return df
 
 # ==========================================
-# 3. RENDER APLIKASI UTAMA
+# 4. RENDER APLIKASI UTAMA (SETELAH LOGIN)
 # ==========================================
+st.title("🎛️ Dashboard Dapur - Leuit Mangkubumi")
+
+# Tambahkan tombol Logout di Sidebar kiri
+st.sidebar.title("👤 Profil Admin")
+st.sidebar.write(f"Masuk sebagai: **{st.secrets['ADMIN_EMAIL']}**")
+if st.sidebar.button("🚪 Keluar (Logout)", type="primary"):
+    st.session_state["logged_in"] = False
+    st.rerun()
+
 try:
     df_master = ambil_data_master()
     
@@ -52,9 +90,6 @@ try:
             "🏠 Mode Normal"
         ])
 
-        # ------------------------------------------
-        # TAB 1: DASHBOARD SUMMARY
-        # ------------------------------------------
         with tab_eksekutif:
             st.subheader("📊 Ringkasan Data Nasional")
             
@@ -68,15 +103,10 @@ try:
             col3.metric("🏢 Total Yayasan Aktif", jml_yayasan)
             
             st.markdown("---")
-            
-            # Peta dinonaktifkan sementara dan diganti dengan pesan peringatan
             st.warning("🗺️ **Peta Persebaran Dapur Dinonaktifkan Sementara.**\n\nFitur *live-geocoding* sedang dimatikan untuk menjaga performa panel admin tetap ringan dan cepat. Data koordinat lokasi sedang disiapkan di proses *backend* terpisah.")
 
-        # ------------------------------------------
-        # TAB 2: MODE JOHAN (FILTER PER PROVINSI)
-        # ------------------------------------------
         with tab_johan:
-            st.subheader("📋 Workbook Dapur SPPG")
+            st.subheader("📋 Workbook Dapur SPPG - khas Johan")
             list_provinsi = sorted([str(x) for x in df_master['provinsi'].unique() if str(x) != ''])
             
             if list_provinsi:
@@ -115,9 +145,6 @@ try:
                         if st.button(f"💾 Simpan Perubahan {yayasan}", key=f"btn_johan_{provinsi_terpilih}_{yayasan}"):
                             st.success(f"Perubahan data {yayasan} siap dikirim!")
 
-        # ------------------------------------------
-        # TAB 3: MODE NORMAL (GLOBAL)
-        # ------------------------------------------
         with tab_normal:
             st.subheader("🏠 Mode Manajemen Normal")
             subtab_per_yayasan, subtab_seluruhnya = st.tabs([
