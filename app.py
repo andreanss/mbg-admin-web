@@ -6,7 +6,7 @@ import libsql_client
 # 1. KONFIGURASI HALAMAN WEB
 # ==========================================
 st.set_page_config(page_title="Admin Panel MBG", page_icon="🍲", layout="wide")
-st.title("🎛️ Admin Panel - Program MBG")
+st.title("🎛️ Dashboard - Leuit")
 
 # ==========================================
 # 2. KONEKSI TURSO CLOUD (MENGGUNAKAN HTTPS)
@@ -48,8 +48,8 @@ try:
     if not df_master.empty:
         tab_eksekutif, tab_johan, tab_normal = st.tabs([
             "📊 Dashboard Summary", 
-            "🧑‍💻 Mode Johan (Sheets Provinsi)", 
-            "🏠 Mode Normal (Global & Yayasan)"
+            "🧑‍💻 Mode Johan", 
+            "🏠 Mode Normal"
         ])
 
         # ------------------------------------------
@@ -76,7 +76,7 @@ try:
         # TAB 2: MODE JOHAN (FILTER PER PROVINSI)
         # ------------------------------------------
         with tab_johan:
-            st.subheader("📋 Workbook Dapur SPPG - Gaya Johan")
+            st.subheader("📋 Workbook Dapur SPPG")
             list_provinsi = sorted([str(x) for x in df_master['provinsi'].unique() if str(x) != ''])
             
             if list_provinsi:
