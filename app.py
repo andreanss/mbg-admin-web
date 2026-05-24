@@ -12,8 +12,8 @@ st.title("🎛️ Admin Panel - Program MBG")
 # 2. KONEKSI TURSO CLOUD (MENGGUNAKAN HTTPS)
 # ==========================================
 URL = "https://mbg-db-andreanss.aws-ap-northeast-1.turso.io"
-# Token Valid
-TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3Nzg2MDk1NzUsImlkIjoiMDE5ZTFkNTctNTYwMS03NmU0LWI4NTUtNjExYTdhNTM3MWVlIiwicmlkIjoiNjc4MjM2ZjYtZDE5YS00ZTFlLWIzZGUtMmQzMjVlMTZlNjY4In0.o_UG55EtdbCwejxsZKYF4RsGeo9vFVOnExgMjqgGQFHaMVVsJloaoT0Km4ZBtiGeORWA7fcyrzsSzxlxnNzCBQ"
+# Token sekarang ditarik dari brankas rahasia Streamlit, bukan ditulis langsung!
+TOKEN = st.secrets["TURSO_TOKEN"]
 
 @st.cache_data(ttl=5)
 def ambil_data_master():
