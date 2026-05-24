@@ -52,9 +52,11 @@ def cek_login():
     if "lockout_until" not in st.session_state:
         st.session_state["lockout_until"] = None
     
-    # Inisialisasi State untuk Filter Pintasan
+    # State untuk menyimpan filter dan pemicu JavaScript
     if "f_status" not in st.session_state:
         st.session_state["f_status"] = PILIHAN_STATUS
+    if "trigger_js_tab" not in st.session_state:
+        st.session_state["trigger_js_tab"] = False
 
     if not st.session_state["logged_in"]:
         st.title("🔒 Gerbang Keamanan MBG")
@@ -268,22 +270,27 @@ try:
 
             col1, col2, col3 = st.columns(3)
             
-            # --- TOMBOL PINTASAN ---
             with col1:
                 st.metric("✅ Dapur Selesai / PKS", jml_selesai)
+                # Tombol untuk pindah tab & filter status otomatis
                 if st.button("Lihat Detail Selesai/PKS ➔", use_container_width=True):
                     st.session_state["f_status"] = ["PKS", "Selesai"]
-                    st.toast("✅ Filter diubah! Silakan buka tab '🏠 Mode Normal' ➔ '🌐 Data Master'", icon="✅")
+                    st.session_state["trigger_js_tab"] = True
+                    st.rerun()
+                    
             with col2:
                 st.metric("⏳ Proses Persiapan", jml_persiapan)
+                # Tombol untuk pindah tab & filter status otomatis
                 if st.button("Lihat Detail Persiapan ➔", use_container_width=True):
                     st.session_state["f_status"] = ["Proses Persiapan"]
-                    st.toast("⏳ Filter diubah! Silakan buka tab '🏠 Mode Normal' ➔ '🌐 Data Master'", icon="⏳")
+                    st.session_state["trigger_js_tab"] = True
+                    st.rerun()
+                    
             with col3:
                 st.metric("🏢 Total Yayasan Aktif", jml_yayasan)
-                if st.button("Tampilkan Semua Data ➔", use_container_width=True):
+                if st.button("Tampilkan Semua Data", use_container_width=True):
                     st.session_state["f_status"] = PILIHAN_STATUS
-                    st.toast("🔄 Filter dikembalikan ke semua status!", icon="🔄")
+                    st.toast("🔄 Filter tabel dikembalikan ke semua status!", icon="🔄")
             
             st.markdown("---")
             
@@ -403,7 +410,7 @@ try:
             with subtab_seluruhnya:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
                 
-                # --- PENGGUNAAN STATE UNTUK FILTER MULTISELECT ---
+                # Menggunakan nilai dari st.session_state["f_status"] yang diatur dari Dashboard
                 flat_filter = col_f1.multiselect("🔍 Status:", PILIHAN_STATUS, key="f_status")
                 flat_sort_col = col_f2.selectbox("⬇️ Urutkan Kolom:", ["ID SPPG", "Nama Yayasan", "Provinsi", "Status"], key="f_sort_col")
                 flat_sort_order = col_f3.radio("Arah:", ["A - Z", "Z - A"], horizontal=True, key="f_sort_order")
@@ -518,6 +525,38 @@ try:
                             
             except Exception as e:
                 st.error(f"Terjadi kegagalan saat membaca file: {e}")
+
+# ==========================================
+# 8. SIHIR JAVASCRIPT UNTUK KLIK OTOMATIS
+# ==========================================
+# Mengeksekusi blok JS ini hanya jika tombol dipencet
+if st.session_state.get("trigger_js_tab", False):
+    js_pindah_tab = """
+    <script>
+        const parentDoc = window.parent.document;
+        function clickTabByText(text) {
+            const tabs = parentDoc.querySelectorAll('button[data-baseweb="tab"]');
+            for (let i = 0; i < tabs.length; i++) {
+                if (tabs[i].innerText.includes(text)) {
+                    tabs[i].click();
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Klik paksa tab Mode Normal
+        clickTabByText("Mode Normal");
+        
+        // Beri waktu 200 milidetik untuk Streamlit merender isi tab, lalu klik sub-tab Data Master
+        setTimeout(() => {
+            clickTabByText("Data Master (Flat View)");
+        }, 200);
+    </script>
+    """
+    st.components.v1.html(js_pindah_tab, height=0, width=0)
+    # Reset pemicu agar tidak berulang terus
+    st.session_state["trigger_js_tab"] = False
 
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem admin: {e}")
