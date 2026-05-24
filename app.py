@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 # ==========================================
 # 1. KONFIGURASI HALAMAN WEB
 # ==========================================
-st.set_page_config(page_title="Admin Panel MBG", page_icon="🍲", layout="wide")
+st.set_page_config(page_title="LEUIT JAYA JAYA JAYA!", page_icon="🍲", layout="wide")
 
 # ==========================================
 # 2. SISTEM KEAMANAN & ANTI-HACKING
@@ -191,10 +191,10 @@ def ambil_data_log():
 # Header custom dengan Popover Pengaturan
 col_title, col_logout = st.columns([8.5, 1.5])
 with col_title:
-    st.title("🎛️ Admin Panel - Program MBG")
+    st.title("🎛️ Dapur MBG - LEUIT GROUP")
 with col_logout:
     st.write("")
-    with st.popover("⚙️ Pengaturan", use_container_width=True):
+    with st.popover("⚙️ Setting", use_container_width=True):
         st.markdown(f"👤 **{st.session_state.get('admin_email', '')}**")
         st.markdown("---")
         st.info("💡 **Ganti Tema:** Klik ikon titik tiga `⋮` di pojok kanan atas layar browser, lalu pilih **Settings** ➔ **Theme**.")
@@ -211,12 +211,12 @@ try:
 
     if not df_master.empty:
         tab_eksekutif, tab_johan, tab_normal, tab_alat = st.tabs([
-            "📊 Dashboard", "🧑‍💻 Mode Johan", "🏠 Mode Normal", "🛠️ Alat Lanjutan"
+            "📊 Dashboard", "🧑‍💻 Mode Johan", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log"
         ])
 
         # --- TAB 1: DASHBOARD ---
         with tab_eksekutif:
-            st.subheader("📊 Ringkasan Data Nasional")
+            st.subheader("📊 Summary")
             jml_selesai = df_master['status'].isin(['PKS', 'Selesai']).sum()
             jml_persiapan = (df_master['status'] == 'Proses Persiapan').sum()
             jml_yayasan = df_master[~df_master['status'].str.lower().isin(['dibatalkan', 'ditolak'])]['nama_yayasan'].nunique()
@@ -275,7 +275,7 @@ try:
 
         # --- TAB 2: MODE JOHAN ---
         with tab_johan:
-            st.subheader("📋 Workbook Dapur SPPG - Gaya Johan")
+            st.subheader("📋 Workbook Dapur SPPG - Style Johan")
             
             # Area Filter & Sort
             col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
@@ -318,7 +318,7 @@ try:
         # --- TAB 3: MODE NORMAL ---
         with tab_normal:
             st.subheader("🏠 Mode Manajemen Normal")
-            subtab_per_yayasan, subtab_seluruhnya = st.tabs(["🏢 Kelompok Per Yayasan (Global)", "🌐 Seluruh Data Master (Flat View)"])
+            subtab_per_yayasan, subtab_seluruhnya = st.tabs(["🏢 Per Yayasan", "🌐 Data Master (Flat View)"])
             
             with subtab_per_yayasan:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
