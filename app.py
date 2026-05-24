@@ -7,13 +7,10 @@ from datetime import datetime, timedelta
 # ==========================================
 # 1. KONFIGURASI HALAMAN WEB
 # ==========================================
-# Menambahkan perintah agar sidebar otomatis terbuka dari awal
 st.set_page_config(page_title="LEUIT JAYA JAYA JAYA!", page_icon="🍲", layout="wide", initial_sidebar_state="expanded")
 
-# --- SIHIR CSS UNTUK MEROMBAK TOMBOL SIDEBAR ---
 st.markdown("""
     <style>
-        /* Modifikasi tombol buka sidebar (saat tertutup) agar sangat jelas */
         [data-testid="collapsedControl"] {
             display: flex;
             align-items: center;
@@ -26,11 +23,9 @@ st.markdown("""
             transition: 0.3s;
             width: auto;
         }
-        /* Sembunyikan ikon panah default */
         [data-testid="collapsedControl"] svg {
             display: none;
         }
-        /* Ganti dengan teks dan logo kustom */
         [data-testid="collapsedControl"]::after {
             content: "➔ 🔍 Buka Pencarian";
             font-weight: bold;
@@ -47,6 +42,8 @@ st.markdown("""
 # ==========================================
 # 2. SISTEM KEAMANAN & ANTI-HACKING
 # ==========================================
+PILIHAN_STATUS = ["Proses Persiapan", "Penentuan KA SPPG", "PKS", "Selesai", "Dibatalkan", "Ditolak"]
+
 def cek_login():
     if "logged_in" not in st.session_state:
         st.session_state["logged_in"] = False
@@ -54,6 +51,10 @@ def cek_login():
         st.session_state["failed_attempts"] = 0
     if "lockout_until" not in st.session_state:
         st.session_state["lockout_until"] = None
+    
+    # Inisialisasi State untuk Filter Pintasan
+    if "f_status" not in st.session_state:
+        st.session_state["f_status"] = PILIHAN_STATUS
 
     if not st.session_state["logged_in"]:
         st.title("🔒 Gerbang Keamanan MBG")
@@ -104,7 +105,6 @@ if not cek_login():
 # ==========================================
 URL = "https://mbg-db-andreanss.aws-ap-northeast-1.turso.io"
 TOKEN = st.secrets["TURSO_TOKEN"]
-PILIHAN_STATUS = ["Proses Persiapan", "Penentuan KA SPPG", "PKS", "Selesai", "Dibatalkan", "Ditolak"]
 
 def eksekusi_query(query, params=[]):
     client = libsql_client.create_client_sync(url=URL, auth_token=TOKEN)
@@ -236,7 +236,6 @@ with col_logout:
             st.session_state.clear()
             st.rerun()
 
-# --- SIDEBAR: PENCARIAN GLOBAL OMNIBOX ---
 st.sidebar.title("🔍 Pencarian Global")
 st.sidebar.caption("Ketik area, nama yayasan, atau ID SPPG untuk memfilter seluruh data.")
 kata_kunci = st.sidebar.text_input("🔎 Masukkan kata kunci...").strip()
@@ -244,7 +243,6 @@ kata_kunci = st.sidebar.text_input("🔎 Masukkan kata kunci...").strip()
 try:
     df_master = ambil_data_master()
     
-    # Menerapkan Filter Pencarian Global Universal
     if not df_master.empty and kata_kunci:
         mask = pd.Series([False] * len(df_master))
         for col in df_master.columns:
@@ -269,9 +267,23 @@ try:
             jml_yayasan = df_master[~df_master['status'].str.lower().isin(['dibatalkan', 'ditolak'])]['nama_yayasan'].nunique()
 
             col1, col2, col3 = st.columns(3)
-            col1.metric("✅ Dapur Selesai / PKS", jml_selesai)
-            col2.metric("⏳ Proses Persiapan", jml_persiapan)
-            col3.metric("🏢 Total Yayasan Aktif", jml_yayasan)
+            
+            # --- TOMBOL PINTASAN ---
+            with col1:
+                st.metric("✅ Dapur Selesai / PKS", jml_selesai)
+                if st.button("Lihat Detail Selesai/PKS ➔", use_container_width=True):
+                    st.session_state["f_status"] = ["PKS", "Selesai"]
+                    st.toast("✅ Filter diubah! Silakan buka tab '🏠 Mode Normal' ➔ '🌐 Data Master'", icon="✅")
+            with col2:
+                st.metric("⏳ Proses Persiapan", jml_persiapan)
+                if st.button("Lihat Detail Persiapan ➔", use_container_width=True):
+                    st.session_state["f_status"] = ["Proses Persiapan"]
+                    st.toast("⏳ Filter diubah! Silakan buka tab '🏠 Mode Normal' ➔ '🌐 Data Master'", icon="⏳")
+            with col3:
+                st.metric("🏢 Total Yayasan Aktif", jml_yayasan)
+                if st.button("Tampilkan Semua Data ➔", use_container_width=True):
+                    st.session_state["f_status"] = PILIHAN_STATUS
+                    st.toast("🔄 Filter dikembalikan ke semua status!", icon="🔄")
             
             st.markdown("---")
             
@@ -390,7 +402,9 @@ try:
 
             with subtab_seluruhnya:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
-                flat_filter = col_f1.multiselect("🔍 Status:", PILIHAN_STATUS, default=PILIHAN_STATUS, key="f_status")
+                
+                # --- PENGGUNAAN STATE UNTUK FILTER MULTISELECT ---
+                flat_filter = col_f1.multiselect("🔍 Status:", PILIHAN_STATUS, key="f_status")
                 flat_sort_col = col_f2.selectbox("⬇️ Urutkan Kolom:", ["ID SPPG", "Nama Yayasan", "Provinsi", "Status"], key="f_sort_col")
                 flat_sort_order = col_f3.radio("Arah:", ["A - Z", "Z - A"], horizontal=True, key="f_sort_order")
                 
