@@ -37,13 +37,11 @@ def cek_login():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             with st.form("form_login"):
-                # Diubah agar lebih universal (bisa nama akun atau email)
                 username = st.text_input("👤 Username / Email")
                 password = st.text_input("🔑 Password", type="password")
                 submit = st.form_submit_button("Masuk ke Dashboard", use_container_width=True)
                 
                 if submit:
-                    # Mengecek apakah username ada di daftar rahasia, dan apakah passwordnya cocok
                     if username in st.secrets["users"] and password == st.secrets["users"][username]:
                         st.session_state["logged_in"] = True
                         st.session_state["admin_email"] = username
@@ -190,7 +188,6 @@ def ambil_data_log():
 # ==========================================
 # 7. HEADER & RENDER APLIKASI
 # ==========================================
-# Header custom dengan Popover Pengaturan
 col_title, col_logout = st.columns([8.5, 1.5])
 with col_title:
     st.title("🎛️ Dapur MBG - LEUIT GROUP")
@@ -211,13 +208,13 @@ try:
 
     list_id_sppg = [x for x in df_master['id_sppg'].unique() if x.strip() != ''] if not df_master.empty else []
 
-    if not df_master.empty:
-        tab_eksekutif, tab_johan, tab_normal, tab_alat = st.tabs([
-            "📊 Dashboard", "🧑‍💻 Mode Johan", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log"
-        ])
+    tab_eksekutif, tab_johan, tab_normal, tab_alat, tab_import = st.tabs([
+        "📊 Dashboard", "🧑‍💻 Mode Johan", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log", "📥 Import Scraping"
+    ])
 
-        # --- TAB 1: DASHBOARD ---
-        with tab_eksekutif:
+    # --- TAB 1: DASHBOARD ---
+    with tab_eksekutif:
+        if not df_master.empty:
             st.subheader("📊 Summary")
             jml_selesai = df_master['status'].isin(['PKS', 'Selesai']).sum()
             jml_persiapan = (df_master['status'] == 'Proses Persiapan').sum()
@@ -232,7 +229,6 @@ try:
             
             col_dash1, col_dash2 = st.columns(2)
             
-            # Tabel Sisa Slot Yayasan
             with col_dash1:
                 st.subheader("🏢 Sisa Slot Yayasan (Terbanyak)")
                 semua_yayasan = df_master[df_master['nama_yayasan'] != '']['nama_yayasan'].unique()
@@ -252,7 +248,6 @@ try:
                 else:
                     st.success("Semua yayasan saat ini sudah terisi penuh (10 slot).")
 
-            # Tabel Rincian per Provinsi
             with col_dash2:
                 st.subheader("📍 Rincian Status per Provinsi")
                 prov_list = []
@@ -261,7 +256,6 @@ try:
                     jml_persiapan_prov = (df_prov['status'] == 'Proses Persiapan').sum()
                     jml_selesai_prov = df_prov['status'].isin(['PKS', 'Selesai']).sum()
                     
-                    # Hanya tampilkan provinsi yang punya data persiapan atau selesai
                     if jml_persiapan_prov > 0 or jml_selesai_prov > 0:
                         prov_list.append({
                             "Provinsi": prov,
@@ -274,12 +268,13 @@ try:
                     st.dataframe(df_prov_stat, use_container_width=True)
                 else:
                     st.info("Belum ada data dengan status tersebut di provinsi manapun.")
+        else:
+            st.warning("Database Turso kosong. Silakan import data terlebih dahulu.")
 
+    if not df_master.empty:
         # --- TAB 2: MODE JOHAN ---
         with tab_johan:
             st.subheader("📋 Workbook Dapur SPPG - Style Johan")
-            
-            # Area Filter & Sort
             col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
             j_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, default=PILIHAN_STATUS, key="j_status")
             j_sort = col_f2.radio("⬇️ Urutkan Yayasan:", ["A - Z", "Z - A"], horizontal=True, key="j_sort")
@@ -299,12 +294,8 @@ try:
                     df_yayasan = df_provinsi[df_provinsi['nama_yayasan'] == yayasan]
                     df_yayasan_filtered = df_yayasan[df_yayasan['status'].isin(j_filter_status)].reset_index(drop=True)
                     
-                    if df_yayasan_filtered.empty:
-                        continue
-                    
-                    # Sort isi tabel berdasarkan status jika diminta
-                    if j_sort_isi == "Status A-Z":
-                        df_yayasan_filtered = df_yayasan_filtered.sort_values(by="status", ascending=True).reset_index(drop=True)
+                    if df_yayasan_filtered.empty: continue
+                    if j_sort_isi == "Status A-Z": df_yayasan_filtered = df_yayasan_filtered.sort_values(by="status", ascending=True).reset_index(drop=True)
                     
                     total_dapur = len(df_yayasan)
                     key_editor = f"edit_johan_{provinsi_terpilih}_{yayasan}"
@@ -337,9 +328,7 @@ try:
                     df_yayasan_filtered = df_yayasan_global[df_yayasan_global['status'].isin(n_filter_status)].reset_index(drop=True)
                     
                     if df_yayasan_filtered.empty: continue
-                    
-                    if n_sort_isi == "Status A-Z":
-                        df_yayasan_filtered = df_yayasan_filtered.sort_values(by="status", ascending=True).reset_index(drop=True)
+                    if n_sort_isi == "Status A-Z": df_yayasan_filtered = df_yayasan_filtered.sort_values(by="status", ascending=True).reset_index(drop=True)
                     
                     key_editor_normal = f"edit_normal_yay_global_{yay_global}"
                     with st.expander(f"🏢 {yay_global} ({len(df_yayasan_filtered)} ditampilkan)"):
@@ -358,7 +347,6 @@ try:
                 flat_sort_order = col_f3.radio("Arah:", ["A - Z", "Z - A"], horizontal=True, key="f_sort_order")
                 
                 col_map = {"ID SPPG": "id_sppg", "Nama Yayasan": "nama_yayasan", "Provinsi": "provinsi", "Status": "status"}
-                
                 df_flat = df_master[df_master['status'].isin(flat_filter)]
                 df_flat = df_flat.sort_values(by=col_map[flat_sort_col], ascending=(flat_sort_order == "A - Z")).reset_index(drop=True)
 
@@ -409,8 +397,69 @@ try:
             if not df_log.empty: st.dataframe(df_log, use_container_width=True)
             else: st.info("Belum ada aktivitas yang terekam.")
 
-    else:
-        st.warning("Database Turso kosong.")
+    # --- TAB 5: IMPORT DATA SCRAPING ---
+    with tab_import:
+        st.header("📥 Import Data Hasil Scraping")
+        st.info("Fitur ini dirancang khusus untuk memproses data keluaran *scraper* Anda. Upload file CSV atau Excel di sini untuk mendistribusikannya secara massal ke dalam database Turso tanpa perlu melalui VS Code.")
+        
+        file_upload = st.file_uploader("📂 Pilih File Data (Format didukung: .csv, .xlsx)", type=["csv", "xlsx"])
+        
+        if file_upload is not None:
+            try:
+                # Membaca format file secara dinamis
+                if file_upload.name.endswith('.csv'):
+                    df_import = pd.read_csv(file_upload)
+                else:
+                    df_import = pd.read_excel(file_upload)
+                
+                # Standarisasi tipe data menghindari Null/NaN
+                df_import = df_import.fillna('').astype(str)
+                
+                st.write(f"🔍 **Preview Data:** Ditemukan {len(df_import)} baris siap di-import.")
+                st.dataframe(df_import.head(10), use_container_width=True)
+                
+                kolom_file = list(df_import.columns)
+                
+                # Validasi minimal ada ID SPPG untuk menghindari data rusak
+                if "id_sppg" not in kolom_file:
+                    st.error("⚠️ Proses ditolak: Kolom 'id_sppg' tidak ditemukan di dalam file. Pastikan nama header kolom di file hasil scraping Anda sudah benar.")
+                else:
+                    st.warning("Pastikan header/nama kolom di file sama persis dengan yang ada di database. Data yang ID-nya sudah ada kemungkinan akan mengalami penolakan (Duplicate Key) dari Turso jika dikonfigurasi unik.")
+                    if st.button("🚀 Mulai Import Massal ke Database", type="primary"):
+                        with st.spinner("⏳ Sedang menembakkan data hasil scraping ke server Turso..."):
+                            sukses = 0
+                            gagal = 0
+                            
+                            for index, row in df_import.iterrows():
+                                id_sppg = row.get("id_sppg", "").strip()
+                                if id_sppg:
+                                    kolom_terisi = [k for k in kolom_file if row[k] != '']
+                                    nilai_terisi = [row[k] for k in kolom_terisi]
+                                    
+                                    if kolom_terisi:
+                                        placeholders = ", ".join(["?"] * len(nilai_terisi))
+                                        query = f"INSERT INTO master_sppg ({', '.join(kolom_terisi)}) VALUES ({placeholders})"
+                                        
+                                        try:
+                                            eksekusi_query(query, nilai_terisi)
+                                            sukses += 1
+                                        except Exception as e:
+                                            gagal += 1
+                                            
+                            # Catat Riwayat
+                            catat_log("IMPORT BULK SCRAPING", f"Upload file {file_upload.name} | Sukses: {sukses} baris | Gagal/Duplikat: {gagal} baris")
+                            
+                            if sukses > 0:
+                                st.success(f"🎉 Selesai! Sebanyak {sukses} data berhasil di-import.")
+                            if gagal > 0:
+                                st.error(f"⚠️ Ditemukan {gagal} baris yang gagal di-import (Kemungkinan ID SPPG bentrok / sudah ada sebelumnya).")
+                                
+                            time.sleep(2.5)
+                            st.cache_data.clear()
+                            st.rerun()
+                            
+            except Exception as e:
+                st.error(f"Terjadi kegagalan saat membaca file: {e}")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem admin: {e}")
