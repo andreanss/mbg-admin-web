@@ -45,16 +45,17 @@ st.markdown("""
 PILIHAN_STATUS = ["Proses Persiapan", "Penentuan KA SPPG", "PKS", "Selesai", "Dibatalkan", "Ditolak"]
 
 def cek_login():
-    if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
-    if "failed_attempts" not in st.session_state:
-        st.session_state["failed_attempts"] = 0
-    if "lockout_until" not in st.session_state:
-        st.session_state["lockout_until"] = None
+    if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
+    if "failed_attempts" not in st.session_state: st.session_state["failed_attempts"] = 0
+    if "lockout_until" not in st.session_state: st.session_state["lockout_until"] = None
     
-    # Inisialisasi State untuk Filter Pintasan
-    if "f_status" not in st.session_state:
-        st.session_state["f_status"] = PILIHAN_STATUS
+    # Menyelaraskan semua filter agar konsisten
+    if "f_status" not in st.session_state: st.session_state["f_status"] = PILIHAN_STATUS
+    if "j_status" not in st.session_state: st.session_state["j_status"] = PILIHAN_STATUS
+    if "n_status" not in st.session_state: st.session_state["n_status"] = PILIHAN_STATUS
+    
+    if "trigger_js_tab" not in st.session_state: st.session_state["trigger_js_tab"] = False
+    if "prev_search" not in st.session_state: st.session_state["prev_search"] = ""
 
     if not st.session_state["logged_in"]:
         st.title("🔒 Gerbang Keamanan MBG")
@@ -240,6 +241,13 @@ st.sidebar.title("🔍 Pencarian Global")
 st.sidebar.caption("Ketik area, nama yayasan, atau ID SPPG untuk memfilter seluruh data.")
 kata_kunci = st.sidebar.text_input("🔎 Masukkan kata kunci...").strip()
 
+# LOGIKA AUTO-RESET FILTER JIKA ADA PENCARIAN BARU
+if kata_kunci != st.session_state["prev_search"]:
+    st.session_state["f_status"] = PILIHAN_STATUS
+    st.session_state["j_status"] = PILIHAN_STATUS
+    st.session_state["n_status"] = PILIHAN_STATUS
+    st.session_state["prev_search"] = kata_kunci
+
 try:
     df_master = ambil_data_master()
     
@@ -268,22 +276,31 @@ try:
 
             col1, col2, col3 = st.columns(3)
             
-            # --- TOMBOL PINTASAN ---
             with col1:
                 st.metric("✅ Dapur Selesai / PKS", jml_selesai)
                 if st.button("Lihat Detail Selesai/PKS ➔", use_container_width=True):
                     st.session_state["f_status"] = ["PKS", "Selesai"]
-                    st.toast("✅ Filter diubah! Silakan buka tab '🏠 Mode Normal' ➔ '🌐 Data Master'", icon="✅")
+                    st.session_state["j_status"] = ["PKS", "Selesai"]
+                    st.session_state["n_status"] = ["PKS", "Selesai"]
+                    st.session_state["trigger_js_tab"] = True
+                    st.rerun()
+                    
             with col2:
                 st.metric("⏳ Proses Persiapan", jml_persiapan)
                 if st.button("Lihat Detail Persiapan ➔", use_container_width=True):
                     st.session_state["f_status"] = ["Proses Persiapan"]
-                    st.toast("⏳ Filter diubah! Silakan buka tab '🏠 Mode Normal' ➔ '🌐 Data Master'", icon="⏳")
+                    st.session_state["j_status"] = ["Proses Persiapan"]
+                    st.session_state["n_status"] = ["Proses Persiapan"]
+                    st.session_state["trigger_js_tab"] = True
+                    st.rerun()
+                    
             with col3:
                 st.metric("🏢 Total Yayasan Aktif", jml_yayasan)
-                if st.button("Tampilkan Semua Data ➔", use_container_width=True):
+                if st.button("Tampilkan Semua Data", use_container_width=True):
                     st.session_state["f_status"] = PILIHAN_STATUS
-                    st.toast("🔄 Filter dikembalikan ke semua status!", icon="🔄")
+                    st.session_state["j_status"] = PILIHAN_STATUS
+                    st.session_state["n_status"] = PILIHAN_STATUS
+                    st.toast("🔄 Filter tabel dikembalikan ke semua status!", icon="🔄")
             
             st.markdown("---")
             
@@ -336,7 +353,7 @@ try:
         with tab_johan:
             st.subheader("📋 Workbook Dapur SPPG - Style Johan")
             col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
-            j_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, default=PILIHAN_STATUS, key="j_status")
+            j_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, key="j_status")
             j_sort = col_f2.radio("⬇️ Urutkan Yayasan:", ["A - Z", "Z - A"], horizontal=True, key="j_sort")
             j_sort_isi = col_f3.radio("↕️ Urut Isi Tabel:", ["Default", "Status A-Z"], horizontal=True, key="j_sort_isi")
             st.markdown("---")
@@ -375,7 +392,7 @@ try:
             
             with subtab_per_yayasan:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
-                n_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, default=PILIHAN_STATUS, key="n_status")
+                n_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, key="n_status")
                 n_sort = col_f2.radio("⬇️ Urutkan Yayasan:", ["A - Z", "Z - A"], horizontal=True, key="n_sort")
                 n_sort_isi = col_f3.radio("↕️ Urut Isi Tabel:", ["Default", "Status A-Z"], horizontal=True, key="n_sort_isi")
                 st.markdown("---")
@@ -402,8 +419,6 @@ try:
 
             with subtab_seluruhnya:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
-                
-                # --- PENGGUNAAN STATE UNTUK FILTER MULTISELECT ---
                 flat_filter = col_f1.multiselect("🔍 Status:", PILIHAN_STATUS, key="f_status")
                 flat_sort_col = col_f2.selectbox("⬇️ Urutkan Kolom:", ["ID SPPG", "Nama Yayasan", "Provinsi", "Status"], key="f_sort_col")
                 flat_sort_order = col_f3.radio("Arah:", ["A - Z", "Z - A"], horizontal=True, key="f_sort_order")
@@ -518,6 +533,34 @@ try:
                             
             except Exception as e:
                 st.error(f"Terjadi kegagalan saat membaca file: {e}")
+
+# ==========================================
+# 8. SIHIR JAVASCRIPT UNTUK KLIK OTOMATIS
+# ==========================================
+if st.session_state.get("trigger_js_tab", False):
+    js_pindah_tab = """
+    <script>
+        const parentDoc = window.parent.document;
+        function clickTabByText(text) {
+            const tabs = parentDoc.querySelectorAll('button[data-baseweb="tab"]');
+            for (let i = 0; i < tabs.length; i++) {
+                if (tabs[i].innerText.includes(text)) {
+                    tabs[i].click();
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        clickTabByText("Mode Normal");
+        
+        setTimeout(() => {
+            clickTabByText("Data Master (Flat View)");
+        }, 200);
+    </script>
+    """
+    st.components.v1.html(js_pindah_tab, height=0, width=0)
+    st.session_state["trigger_js_tab"] = False
 
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem admin: {e}")
