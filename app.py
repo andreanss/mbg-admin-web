@@ -49,7 +49,6 @@ def cek_login():
     if "failed_attempts" not in st.session_state: st.session_state["failed_attempts"] = 0
     if "lockout_until" not in st.session_state: st.session_state["lockout_until"] = None
     
-    # Menyelaraskan semua filter agar konsisten
     if "f_status" not in st.session_state: st.session_state["f_status"] = PILIHAN_STATUS
     if "j_status" not in st.session_state: st.session_state["j_status"] = PILIHAN_STATUS
     if "n_status" not in st.session_state: st.session_state["n_status"] = PILIHAN_STATUS
@@ -241,13 +240,13 @@ st.sidebar.title("🔍 Pencarian Global")
 st.sidebar.caption("Ketik area, nama yayasan, atau ID SPPG untuk memfilter seluruh data.")
 kata_kunci = st.sidebar.text_input("🔎 Masukkan kata kunci...").strip()
 
-# LOGIKA AUTO-RESET FILTER JIKA ADA PENCARIAN BARU
 if kata_kunci != st.session_state["prev_search"]:
     st.session_state["f_status"] = PILIHAN_STATUS
     st.session_state["j_status"] = PILIHAN_STATUS
     st.session_state["n_status"] = PILIHAN_STATUS
     st.session_state["prev_search"] = kata_kunci
 
+# BUNGKUS SELURUH RENDER APP DALAM 1 BLOK TRY
 try:
     df_master = ambil_data_master()
     
@@ -346,7 +345,7 @@ try:
                 else:
                     st.info("Belum ada data dengan status tersebut di pencarian ini.")
         else:
-            st.warning("Data tidak ditemukan atau Database Turso kosong. Silakan periksa kata kunci pencarian atau import data terlebih dahulu.")
+            st.warning("Data tidak ditemukan atau Database Turso kosong.")
 
     if not df_master.empty:
         # --- TAB 2: MODE JOHAN ---
@@ -477,62 +476,45 @@ try:
     # --- TAB 5: IMPORT DATA SCRAPING ---
     with tab_import:
         st.header("📥 Import Data Hasil Scraping")
-        st.info("Fitur ini dirancang khusus untuk memproses data keluaran *scraper* Anda. Upload file CSV atau Excel di sini untuk mendistribusikannya secara massal ke dalam database Turso tanpa perlu melalui VS Code.")
-        
-        file_upload = st.file_uploader("📂 Pilih File Data (Format didukung: .csv, .xlsx)", type=["csv", "xlsx"])
+        file_upload = st.file_uploader("📂 Pilih File Data (.csv, .xlsx)", type=["csv", "xlsx"])
         
         if file_upload is not None:
-            try:
-                if file_upload.name.endswith('.csv'):
-                    df_import = pd.read_csv(file_upload)
-                else:
-                    df_import = pd.read_excel(file_upload)
-                
-                df_import = df_import.fillna('').astype(str)
-                
-                st.write(f"🔍 **Preview Data:** Ditemukan {len(df_import)} baris siap di-import.")
-                st.dataframe(df_import.head(10), use_container_width=True)
-                
-                kolom_file = list(df_import.columns)
-                
-                if "id_sppg" not in kolom_file:
-                    st.error("⚠️ Proses ditolak: Kolom 'id_sppg' tidak ditemukan di dalam file. Pastikan nama header kolom di file hasil scraping Anda sudah benar.")
-                else:
-                    st.warning("Pastikan header/nama kolom di file sama persis dengan yang ada di database. Data yang ID-nya sudah ada kemungkinan akan mengalami penolakan (Duplicate Key) dari Turso jika dikonfigurasi unik.")
-                    if st.button("🚀 Mulai Import Massal ke Database", type="primary"):
-                        with st.spinner("⏳ Sedang menembakkan data hasil scraping ke server Turso..."):
-                            sukses = 0
-                            gagal = 0
-                            
-                            for index, row in df_import.iterrows():
-                                id_sppg = row.get("id_sppg", "").strip()
-                                if id_sppg:
-                                    kolom_terisi = [k for k in kolom_file if row[k] != '']
-                                    nilai_terisi = [row[k] for k in kolom_terisi]
-                                    
-                                    if kolom_terisi:
-                                        placeholders = ", ".join(["?"] * len(nilai_terisi))
-                                        query = f"INSERT INTO master_sppg ({', '.join(kolom_terisi)}) VALUES ({placeholders})"
-                                        
-                                        try:
-                                            eksekusi_query(query, nilai_terisi)
-                                            sukses += 1
-                                        except Exception as e:
-                                            gagal += 1
-                                            
-                            catat_log("IMPORT BULK SCRAPING", f"Upload file {file_upload.name} | Sukses: {sukses} baris | Gagal/Duplikat: {gagal} baris")
-                            
-                            if sukses > 0:
-                                st.success(f"🎉 Selesai! Sebanyak {sukses} data berhasil di-import.")
-                            if gagal > 0:
-                                st.error(f"⚠️ Ditemukan {gagal} baris yang gagal di-import (Kemungkinan ID SPPG bentrok / sudah ada sebelumnya).")
-                                
-                            time.sleep(2.5)
-                            st.cache_data.clear()
-                            st.rerun()
-                            
-            except Exception as e:
-                st.error(f"Terjadi kegagalan saat membaca file: {e}")
+            if file_upload.name.endswith('.csv'): df_import = pd.read_csv(file_upload)
+            else: df_import = pd.read_excel(file_upload)
+            
+            df_import = df_import.fillna('').astype(str)
+            st.write(f"🔍 **Preview Data:** Ditemukan {len(df_import)} baris siap di-import.")
+            st.dataframe(df_import.head(10), use_container_width=True)
+            
+            kolom_file = list(df_import.columns)
+            if "id_sppg" not in kolom_file:
+                st.error("⚠️ Proses ditolak: Kolom 'id_sppg' tidak ditemukan di dalam file.")
+            else:
+                if st.button("🚀 Mulai Import Massal ke Database", type="primary"):
+                    with st.spinner("⏳ Sedang menembakkan data hasil scraping ke server Turso..."):
+                        sukses = 0; gagal = 0
+                        for index, row in df_import.iterrows():
+                            id_sppg = row.get("id_sppg", "").strip()
+                            if id_sppg:
+                                kolom_terisi = [k for k in kolom_file if row[k] != '']
+                                nilai_terisi = [row[k] for k in kolom_terisi]
+                                if kolom_terisi:
+                                    placeholders = ", ".join(["?"] * len(nilai_terisi))
+                                    query = f"INSERT INTO master_sppg ({', '.join(kolom_terisi)}) VALUES ({placeholders})"
+                                    try:
+                                        eksekusi_query(query, nilai_terisi)
+                                        sukses += 1
+                                    except Exception as e:
+                                        gagal += 1
+                        
+                        catat_log("IMPORT BULK SCRAPING", f"Upload file {file_upload.name} | Sukses: {sukses} | Gagal: {gagal}")
+                        if sukses > 0: st.success(f"🎉 Selesai! {sukses} data berhasil di-import.")
+                        if gagal > 0: st.error(f"⚠️ {gagal} baris gagal di-import (ID SPPG duplikat).")
+                        
+                        time.sleep(2.5); st.cache_data.clear(); st.rerun()
+
+except Exception as e:
+    st.error(f"Terjadi kesalahan sistem admin: {e}")
 
 # ==========================================
 # 8. SIHIR JAVASCRIPT UNTUK KLIK OTOMATIS
@@ -561,6 +543,3 @@ if st.session_state.get("trigger_js_tab", False):
     """
     st.components.v1.html(js_pindah_tab, height=0, width=0)
     st.session_state["trigger_js_tab"] = False
-
-except Exception as e:
-    st.error(f"Terjadi kesalahan sistem admin: {e}")
