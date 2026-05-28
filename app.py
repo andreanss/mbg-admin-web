@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import libsql_client
 import time
+import io
 from datetime import datetime, timedelta
 
 # ==========================================
@@ -135,6 +136,13 @@ def catat_log(aksi, detail):
 
 inisialisasi_log()
 
+# FUNGSI EXPORT KE EXCEL
+def konversi_ke_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Data_MBG')
+    return output.getvalue()
+
 # ==========================================
 # 4. CALLBACK SINKRONISASI OTOMATIS
 # ==========================================
@@ -246,7 +254,6 @@ if kata_kunci != st.session_state["prev_search"]:
     st.session_state["n_status"] = PILIHAN_STATUS
     st.session_state["prev_search"] = kata_kunci
 
-# BUNGKUS SELURUH RENDER APP DALAM 1 BLOK TRY
 try:
     df_master = ambil_data_master()
     
@@ -383,6 +390,15 @@ try:
                             use_container_width=True, num_rows="dynamic", key=key_editor,
                             on_change=proses_perubahan_global, args=(key_editor, df_yayasan_filtered, "MODE JOHAN")
                         )
+                        # Tambahan Tombol Download Excel per Yayasan
+                        excel_data = konversi_ke_excel(df_yayasan_filtered)
+                        st.download_button(
+                            label=f"📥 Download Excel {yayasan}",
+                            data=excel_data,
+                            file_name=f"Data_MBG_{yayasan}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"dl_johan_{provinsi_terpilih}_{yayasan}"
+                        )
 
         # --- TAB 3: MODE NORMAL ---
         with tab_normal:
@@ -415,6 +431,15 @@ try:
                             use_container_width=True, num_rows="dynamic", key=key_editor_normal,
                             on_change=proses_perubahan_global, args=(key_editor_normal, df_yayasan_filtered, "NORMAL PER YAYASAN")
                         )
+                        # Tambahan Tombol Download Excel Global
+                        excel_data_global = konversi_ke_excel(df_yayasan_filtered)
+                        st.download_button(
+                            label=f"📥 Download Excel {yay_global}",
+                            data=excel_data_global,
+                            file_name=f"Data_MBG_{yay_global}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"dl_normal_{yay_global}"
+                        )
 
             with subtab_seluruhnya:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
@@ -433,6 +458,15 @@ try:
                                    "status": st.column_config.SelectboxColumn("Status", options=PILIHAN_STATUS, required=True)},
                     use_container_width=True, height=500, num_rows="dynamic", key=key_editor_flat,
                     on_change=proses_perubahan_global, args=(key_editor_flat, df_flat, "NORMAL FLAT VIEW")
+                )
+                # Tambahan Tombol Download Excel Flat View
+                excel_data_flat = konversi_ke_excel(df_flat)
+                st.download_button(
+                    label="📥 Download Seluruh Tabel Ini ke Excel",
+                    data=excel_data_flat,
+                    file_name="Data_Master_MBG_Seluruhnya.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_flat_view"
                 )
 
         # --- TAB 4: ALAT LANJUTAN ---

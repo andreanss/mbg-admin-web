@@ -4,3 +4,4 @@ libsql-client
 folium
 streamlit-folium
 geopy
+openpyxl
