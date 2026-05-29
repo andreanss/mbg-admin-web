@@ -136,7 +136,6 @@ def catat_log(aksi, detail):
 
 inisialisasi_log()
 
-# FUNGSI EXPORT KE EXCEL
 def konversi_ke_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -256,6 +255,7 @@ if kata_kunci != st.session_state["prev_search"]:
 
 try:
     df_master = ambil_data_master()
+    df_master_clean = df_master.copy() # Salinan utuh untuk sinkronisasi
     
     if not df_master.empty and kata_kunci:
         mask = pd.Series([False] * len(df_master))
@@ -281,7 +281,6 @@ try:
             jml_yayasan = df_master[~df_master['status'].str.lower().isin(['dibatalkan', 'ditolak'])]['nama_yayasan'].nunique()
 
             col1, col2, col3 = st.columns(3)
-            
             with col1:
                 st.metric("✅ Dapur Selesai / PKS", jml_selesai)
                 if st.button("Lihat Detail Selesai/PKS ➔", use_container_width=True):
@@ -290,7 +289,6 @@ try:
                     st.session_state["n_status"] = ["PKS", "Selesai"]
                     st.session_state["trigger_js_tab"] = True
                     st.rerun()
-                    
             with col2:
                 st.metric("⏳ Proses Persiapan", jml_persiapan)
                 if st.button("Lihat Detail Persiapan ➔", use_container_width=True):
@@ -299,7 +297,6 @@ try:
                     st.session_state["n_status"] = ["Proses Persiapan"]
                     st.session_state["trigger_js_tab"] = True
                     st.rerun()
-                    
             with col3:
                 st.metric("🏢 Total Yayasan Aktif", jml_yayasan)
                 if st.button("Tampilkan Semua Data", use_container_width=True):
@@ -309,7 +306,6 @@ try:
                     st.toast("🔄 Filter tabel dikembalikan ke semua status!", icon="🔄")
             
             st.markdown("---")
-            
             col_dash1, col_dash2 = st.columns(2)
             
             with col_dash1:
@@ -390,15 +386,8 @@ try:
                             use_container_width=True, num_rows="dynamic", key=key_editor,
                             on_change=proses_perubahan_global, args=(key_editor, df_yayasan_filtered, "MODE JOHAN")
                         )
-                        # Tambahan Tombol Download Excel per Yayasan
                         excel_data = konversi_ke_excel(df_yayasan_filtered)
-                        st.download_button(
-                            label=f"📥 Download Excel {yayasan}",
-                            data=excel_data,
-                            file_name=f"Data_MBG_{yayasan}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key=f"dl_johan_{provinsi_terpilih}_{yayasan}"
-                        )
+                        st.download_button("📥 Download Excel", data=excel_data, file_name=f"Data_MBG_{yayasan}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"dl_johan_{provinsi_terpilih}_{yayasan}")
 
         # --- TAB 3: MODE NORMAL ---
         with tab_normal:
@@ -431,15 +420,8 @@ try:
                             use_container_width=True, num_rows="dynamic", key=key_editor_normal,
                             on_change=proses_perubahan_global, args=(key_editor_normal, df_yayasan_filtered, "NORMAL PER YAYASAN")
                         )
-                        # Tambahan Tombol Download Excel Global
                         excel_data_global = konversi_ke_excel(df_yayasan_filtered)
-                        st.download_button(
-                            label=f"📥 Download Excel {yay_global}",
-                            data=excel_data_global,
-                            file_name=f"Data_MBG_{yay_global}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key=f"dl_normal_{yay_global}"
-                        )
+                        st.download_button("📥 Download Excel", data=excel_data_global, file_name=f"Data_MBG_{yay_global}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"dl_normal_{yay_global}")
 
             with subtab_seluruhnya:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
@@ -459,15 +441,8 @@ try:
                     use_container_width=True, height=500, num_rows="dynamic", key=key_editor_flat,
                     on_change=proses_perubahan_global, args=(key_editor_flat, df_flat, "NORMAL FLAT VIEW")
                 )
-                # Tambahan Tombol Download Excel Flat View
                 excel_data_flat = konversi_ke_excel(df_flat)
-                st.download_button(
-                    label="📥 Download Seluruh Tabel Ini ke Excel",
-                    data=excel_data_flat,
-                    file_name="Data_Master_MBG_Seluruhnya.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="dl_flat_view"
-                )
+                st.download_button("📥 Download Seluruh Tabel Ini ke Excel", data=excel_data_flat, file_name="Data_Master_MBG.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_flat_view")
 
         # --- TAB 4: ALAT LANJUTAN ---
         with tab_alat:
@@ -507,45 +482,112 @@ try:
             if not df_log.empty: st.dataframe(df_log, use_container_width=True)
             else: st.info("Belum ada aktivitas yang terekam.")
 
-    # --- TAB 5: IMPORT DATA SCRAPING ---
+    # --- TAB 5: IMPORT & SINKRONISASI DATA SCRAPING ---
     with tab_import:
-        st.header("📥 Import Data Hasil Scraping")
+        st.header("📥 Sinkronisasi Data Hasil Scraping")
+        st.info("Upload file hasil scraping Anda. Sistem akan membandingkannya dengan database saat ini, menambah data baru, dan memperbarui (update) data lama jika terdeteksi ada perubahan.")
+        
         file_upload = st.file_uploader("📂 Pilih File Data (.csv, .xlsx)", type=["csv", "xlsx"])
         
         if file_upload is not None:
-            if file_upload.name.endswith('.csv'): df_import = pd.read_csv(file_upload)
-            else: df_import = pd.read_excel(file_upload)
-            
-            df_import = df_import.fillna('').astype(str)
-            st.write(f"🔍 **Preview Data:** Ditemukan {len(df_import)} baris siap di-import.")
-            st.dataframe(df_import.head(10), use_container_width=True)
-            
-            kolom_file = list(df_import.columns)
-            if "id_sppg" not in kolom_file:
-                st.error("⚠️ Proses ditolak: Kolom 'id_sppg' tidak ditemukan di dalam file.")
-            else:
-                if st.button("🚀 Mulai Import Massal ke Database", type="primary"):
-                    with st.spinner("⏳ Sedang menembakkan data hasil scraping ke server Turso..."):
-                        sukses = 0; gagal = 0
-                        for index, row in df_import.iterrows():
-                            id_sppg = row.get("id_sppg", "").strip()
-                            if id_sppg:
-                                kolom_terisi = [k for k in kolom_file if row[k] != '']
-                                nilai_terisi = [row[k] for k in kolom_terisi]
-                                if kolom_terisi:
-                                    placeholders = ", ".join(["?"] * len(nilai_terisi))
-                                    query = f"INSERT INTO master_sppg ({', '.join(kolom_terisi)}) VALUES ({placeholders})"
-                                    try:
-                                        eksekusi_query(query, nilai_terisi)
-                                        sukses += 1
-                                    except Exception as e:
-                                        gagal += 1
+            try:
+                if file_upload.name.endswith('.csv'): df_import = pd.read_csv(file_upload)
+                else: df_import = pd.read_excel(file_upload)
+                
+                df_import = df_import.fillna('').astype(str)
+                for col in df_import.columns: df_import[col] = df_import[col].str.strip()
+                
+                if "id_sppg" not in df_import.columns:
+                    st.error("⚠️ Gagal: Kolom 'id_sppg' tidak ditemukan di dalam file Anda.")
+                else:
+                    # PROSES KOMPARASI DATA
+                    db_indexed = df_master_clean.set_index('id_sppg')
+                    file_indexed = df_import.set_index('id_sppg')
+                    
+                    id_baru = file_indexed.index.difference(db_indexed.index)
+                    id_sama = file_indexed.index.intersection(db_indexed.index)
+                    
+                    df_baru = file_indexed.loc[id_baru].reset_index()
+                    
+                    list_perubahan = []
+                    query_updates = []
+                    
+                    for id_sppg in id_sama:
+                        baris_lama = db_indexed.loc[id_sppg]
+                        baris_baru = file_indexed.loc[id_sppg]
                         
-                        catat_log("IMPORT BULK SCRAPING", f"Upload file {file_upload.name} | Sukses: {sukses} | Gagal: {gagal}")
-                        if sukses > 0: st.success(f"🎉 Selesai! {sukses} data berhasil di-import.")
-                        if gagal > 0: st.error(f"⚠️ {gagal} baris gagal di-import (ID SPPG duplikat).")
+                        kolom_berubah = {}
+                        for col in file_indexed.columns:
+                            if col in db_indexed.columns:
+                                val_lama = str(baris_lama[col]).strip()
+                                val_baru = str(baris_baru[col]).strip()
+                                # Catat jika berbeda dan kolom baru tidak kosong
+                                if val_lama != val_baru and val_baru != '':
+                                    kolom_berubah[col] = val_baru
+                                    list_perubahan.append({
+                                        "ID SPPG": id_sppg,
+                                        "Kolom": col,
+                                        "Data Lama": val_lama,
+                                        "Data Baru": val_baru
+                                    })
+                                    
+                        if kolom_berubah:
+                            query_updates.append((id_sppg, kolom_berubah))
+                    
+                    # TAMPILAN RINGKASAN
+                    st.subheader("📊 Ringkasan Sinkronisasi")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("🆕 Data Baru (Akan Ditambah)", len(df_baru))
+                    c2.metric("🔄 Data Berubah (Akan Diupdate)", len(query_updates))
+                    c3.metric("⏭️ Data Sama (Dilewati)", len(id_sama) - len(query_updates))
+                    
+                    if list_perubahan:
+                        st.markdown("#### 🔄 Rincian Data yang Akan Diupdate")
+                        st.dataframe(pd.DataFrame(list_perubahan), use_container_width=True)
                         
-                        time.sleep(2.5); st.cache_data.clear(); st.rerun()
+                    if not df_baru.empty:
+                        st.markdown("#### 🆕 Rincian Data Baru yang Akan Ditambah")
+                        st.dataframe(df_baru.head(10), use_container_width=True)
+                        if len(df_baru) > 10: st.caption(f"...dan {len(df_baru)-10} baris lainnya.")
+
+                    if len(df_baru) > 0 or len(query_updates) > 0:
+                        st.warning("⚠️ Pastikan preview perubahan di atas sudah benar sebelum mengeksekusi.")
+                        if st.button("🚀 Eksekusi Sinkronisasi ke Database", type="primary", use_container_width=True):
+                            with st.spinner("⏳ Menulis perubahan ke server Turso..."):
+                                sukses_insert = 0
+                                sukses_update = 0
+                                
+                                # EKSEKUSI INSERT
+                                if not df_baru.empty:
+                                    kolom_insert = list(df_baru.columns)
+                                    for _, row in df_baru.iterrows():
+                                        kolom_terisi = [k for k in kolom_insert if row[k] != '']
+                                        nilai_terisi = [row[k] for k in kolom_terisi]
+                                        if kolom_terisi:
+                                            placeholders = ", ".join(["?"] * len(nilai_terisi))
+                                            query = f"INSERT INTO master_sppg ({', '.join(kolom_terisi)}) VALUES ({placeholders})"
+                                            eksekusi_query(query, nilai_terisi)
+                                            sukses_insert += 1
+                                            
+                                # EKSEKUSI UPDATE
+                                for id_sppg, row_changes in query_updates:
+                                    cols = list(row_changes.keys())
+                                    vals = list(row_changes.values())
+                                    set_clause = ", ".join([f"{c} = ?" for c in cols])
+                                    query = f"UPDATE master_sppg SET {set_clause} WHERE id_sppg = ?"
+                                    eksekusi_query(query, vals + [id_sppg])
+                                    sukses_update += 1
+                                
+                                catat_log("SYNC SCRAPING", f"File: {file_upload.name} | Insert: {sukses_insert} | Update: {sukses_update}")
+                                st.success(f"🎉 Sinkronisasi Selesai! {sukses_insert} baris ditambah, {sukses_update} baris diperbarui.")
+                                time.sleep(2.5)
+                                st.cache_data.clear()
+                                st.rerun()
+                    else:
+                        st.info("✨ Seluruh isi file CSV/Excel ini sudah sama persis dengan database. Tidak ada yang perlu di-sinkronisasi.")
+                            
+            except Exception as e:
+                st.error(f"Terjadi kegagalan saat memproses file: {e}")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem admin: {e}")
