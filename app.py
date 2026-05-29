@@ -56,8 +56,6 @@ def cek_login():
     
     if "trigger_js_tab" not in st.session_state: st.session_state["trigger_js_tab"] = False
     if "prev_search" not in st.session_state: st.session_state["prev_search"] = ""
-    
-    # State untuk menyimpan hasil sinkronisasi terakhir agar bisa dipresentasikan
     if "last_sync_result" not in st.session_state: st.session_state["last_sync_result"] = None
 
     if not st.session_state["logged_in"]:
@@ -139,10 +137,10 @@ def catat_log(aksi, detail):
 
 inisialisasi_log()
 
-def konversi_ke_excel(df):
+def konversi_ke_excel(df, sheet_name='Data_MBG'):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Data_MBG')
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
     return output.getvalue()
 
 # ==========================================
@@ -196,7 +194,7 @@ def tampilkan_konfirmasi_hapus(list_id):
             for idx in list_id:
                 eksekusi_query("DELETE FROM master_sppg WHERE id_sppg = ?", [idx])
                 catat_log("DELETE DATA", f"Menghapus baris data ID SPPG: {idx}")
-            st.success("Berhasil dihapus!")
+            st.success("Berhasil deleted!")
             del st.session_state["pending_delete_ids"]
             st.cache_data.clear()
             st.rerun()
@@ -489,7 +487,6 @@ try:
     with tab_import:
         st.header("📥 Sinkronisasi Data Hasil Scraping")
         
-        # --- BLOK TAMPILAN PRESENTASI SINKRONISASI TERAKHIR ---
         if st.session_state.get("last_sync_result"):
             res = st.session_state["last_sync_result"]
             st.success(f"✅ Riwayat Sinkronisasi Terakhir (Waktu: {res['waktu']} | File: {res['file_name']})")
@@ -500,7 +497,20 @@ try:
             
             if res["list_perubahan"]:
                 st.markdown("#### 🔄 Rincian Data yang Diperbarui")
-                st.dataframe(pd.DataFrame(res["list_perubahan"]), use_container_width=True)
+                df_report_perubahan = pd.DataFrame(res["list_perubahan"])
+                st.dataframe(df_report_perubahan, use_container_width=True)
+                
+                # --- TOMBOL DOWNLOAD EXCEL UNTUK LAPORAN PERUBAHAN ---
+                excel_report_data = konversi_ke_excel(df_report_perubahan, sheet_name="Laporan_Perubahan_Dapur")
+                st.download_button(
+                    label="📥 Download Laporan Perubahan (Excel)",
+                    data=excel_report_data,
+                    file_name=f"Laporan_Perubahan_Scraping_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_report_perubahan_sync"
+                )
+                st.write("") # Spasi margin bawah
+            
             if not res["df_baru"].empty:
                 st.markdown("#### 🆕 Rincian Data Baru yang Ditambahkan")
                 st.dataframe(res["df_baru"], use_container_width=True)
@@ -510,7 +520,6 @@ try:
                 st.rerun()
                 
             st.markdown("---")
-        # --------------------------------------------------------
         
         st.info("Upload file hasil scraping Anda. Sistem akan membandingkannya dengan database saat ini, menambah data baru, dan memperbarui (update) data lama jika terdeteksi ada perubahan.")
         file_upload = st.file_uploader("📂 Pilih File Data (.csv, .xlsx)", type=["csv", "xlsx"])
@@ -601,7 +610,6 @@ try:
                                 
                                 catat_log("SYNC SCRAPING", f"File: {file_upload.name} | Insert: {sukses_insert} | Update: {sukses_update}")
                                 
-                                # Simpan hasil ke Session State agar bisa dipresentasikan nanti
                                 st.session_state["last_sync_result"] = {
                                     "waktu": waktu_wib(),
                                     "file_name": file_upload.name,
@@ -612,7 +620,7 @@ try:
                                 }
                                 
                                 st.cache_data.clear()
-                                st.rerun() # Langsung muat ulang, ringkasan akan muncul di atas
+                                st.rerun()
                     else:
                         st.info("✨ Seluruh isi file CSV/Excel ini sudah sama persis dengan database. Tidak ada yang perlu di-sinkronisasi.")
                             
