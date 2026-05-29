@@ -56,6 +56,9 @@ def cek_login():
     
     if "trigger_js_tab" not in st.session_state: st.session_state["trigger_js_tab"] = False
     if "prev_search" not in st.session_state: st.session_state["prev_search"] = ""
+    
+    # State untuk menyimpan hasil sinkronisasi terakhir agar bisa dipresentasikan
+    if "last_sync_result" not in st.session_state: st.session_state["last_sync_result"] = None
 
     if not st.session_state["logged_in"]:
         st.title("🔒 Gerbang Keamanan MBG")
@@ -255,7 +258,7 @@ if kata_kunci != st.session_state["prev_search"]:
 
 try:
     df_master = ambil_data_master()
-    df_master_clean = df_master.copy() # Salinan utuh untuk sinkronisasi
+    df_master_clean = df_master.copy()
     
     if not df_master.empty and kata_kunci:
         mask = pd.Series([False] * len(df_master))
@@ -485,8 +488,31 @@ try:
     # --- TAB 5: IMPORT & SINKRONISASI DATA SCRAPING ---
     with tab_import:
         st.header("📥 Sinkronisasi Data Hasil Scraping")
-        st.info("Upload file hasil scraping Anda. Sistem akan membandingkannya dengan database saat ini, menambah data baru, dan memperbarui (update) data lama jika terdeteksi ada perubahan.")
         
+        # --- BLOK TAMPILAN PRESENTASI SINKRONISASI TERAKHIR ---
+        if st.session_state.get("last_sync_result"):
+            res = st.session_state["last_sync_result"]
+            st.success(f"✅ Riwayat Sinkronisasi Terakhir (Waktu: {res['waktu']} | File: {res['file_name']})")
+            
+            c_sum1, c_sum2 = st.columns(2)
+            c_sum1.metric("🆕 Berhasil Ditambah (Insert)", res["sukses_insert"])
+            c_sum2.metric("🔄 Berhasil Diperbarui (Update)", res["sukses_update"])
+            
+            if res["list_perubahan"]:
+                st.markdown("#### 🔄 Rincian Data yang Diperbarui")
+                st.dataframe(pd.DataFrame(res["list_perubahan"]), use_container_width=True)
+            if not res["df_baru"].empty:
+                st.markdown("#### 🆕 Rincian Data Baru yang Ditambahkan")
+                st.dataframe(res["df_baru"], use_container_width=True)
+            
+            if st.button("❌ Tutup Layar Laporan Ini", type="primary"):
+                st.session_state["last_sync_result"] = None
+                st.rerun()
+                
+            st.markdown("---")
+        # --------------------------------------------------------
+        
+        st.info("Upload file hasil scraping Anda. Sistem akan membandingkannya dengan database saat ini, menambah data baru, dan memperbarui (update) data lama jika terdeteksi ada perubahan.")
         file_upload = st.file_uploader("📂 Pilih File Data (.csv, .xlsx)", type=["csv", "xlsx"])
         
         if file_upload is not None:
@@ -500,7 +526,6 @@ try:
                 if "id_sppg" not in df_import.columns:
                     st.error("⚠️ Gagal: Kolom 'id_sppg' tidak ditemukan di dalam file Anda.")
                 else:
-                    # PROSES KOMPARASI DATA
                     db_indexed = df_master_clean.set_index('id_sppg')
                     file_indexed = df_import.set_index('id_sppg')
                     
@@ -521,7 +546,6 @@ try:
                             if col in db_indexed.columns:
                                 val_lama = str(baris_lama[col]).strip()
                                 val_baru = str(baris_baru[col]).strip()
-                                # Catat jika berbeda dan kolom baru tidak kosong
                                 if val_lama != val_baru and val_baru != '':
                                     kolom_berubah[col] = val_baru
                                     list_perubahan.append({
@@ -534,19 +558,18 @@ try:
                         if kolom_berubah:
                             query_updates.append((id_sppg, kolom_berubah))
                     
-                    # TAMPILAN RINGKASAN
-                    st.subheader("📊 Ringkasan Sinkronisasi")
+                    st.subheader("📊 Preview Rencana Sinkronisasi")
                     c1, c2, c3 = st.columns(3)
                     c1.metric("🆕 Data Baru (Akan Ditambah)", len(df_baru))
                     c2.metric("🔄 Data Berubah (Akan Diupdate)", len(query_updates))
                     c3.metric("⏭️ Data Sama (Dilewati)", len(id_sama) - len(query_updates))
                     
                     if list_perubahan:
-                        st.markdown("#### 🔄 Rincian Data yang Akan Diupdate")
+                        st.markdown("#### 🔄 Preview Data yang Akan Diupdate")
                         st.dataframe(pd.DataFrame(list_perubahan), use_container_width=True)
                         
                     if not df_baru.empty:
-                        st.markdown("#### 🆕 Rincian Data Baru yang Akan Ditambah")
+                        st.markdown("#### 🆕 Preview Data Baru yang Akan Ditambah")
                         st.dataframe(df_baru.head(10), use_container_width=True)
                         if len(df_baru) > 10: st.caption(f"...dan {len(df_baru)-10} baris lainnya.")
 
@@ -557,7 +580,6 @@ try:
                                 sukses_insert = 0
                                 sukses_update = 0
                                 
-                                # EKSEKUSI INSERT
                                 if not df_baru.empty:
                                     kolom_insert = list(df_baru.columns)
                                     for _, row in df_baru.iterrows():
@@ -569,7 +591,6 @@ try:
                                             eksekusi_query(query, nilai_terisi)
                                             sukses_insert += 1
                                             
-                                # EKSEKUSI UPDATE
                                 for id_sppg, row_changes in query_updates:
                                     cols = list(row_changes.keys())
                                     vals = list(row_changes.values())
@@ -579,10 +600,19 @@ try:
                                     sukses_update += 1
                                 
                                 catat_log("SYNC SCRAPING", f"File: {file_upload.name} | Insert: {sukses_insert} | Update: {sukses_update}")
-                                st.success(f"🎉 Sinkronisasi Selesai! {sukses_insert} baris ditambah, {sukses_update} baris diperbarui.")
-                                time.sleep(2.5)
+                                
+                                # Simpan hasil ke Session State agar bisa dipresentasikan nanti
+                                st.session_state["last_sync_result"] = {
+                                    "waktu": waktu_wib(),
+                                    "file_name": file_upload.name,
+                                    "df_baru": df_baru,
+                                    "list_perubahan": list_perubahan,
+                                    "sukses_insert": sukses_insert,
+                                    "sukses_update": sukses_update
+                                }
+                                
                                 st.cache_data.clear()
-                                st.rerun()
+                                st.rerun() # Langsung muat ulang, ringkasan akan muncul di atas
                     else:
                         st.info("✨ Seluruh isi file CSV/Excel ini sudah sama persis dengan database. Tidak ada yang perlu di-sinkronisasi.")
                             
