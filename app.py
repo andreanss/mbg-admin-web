@@ -487,7 +487,6 @@ try:
     with tab_import:
         st.header("📥 Sinkronisasi Data Hasil Scraping")
         
-        # --- BLOK TAMPILAN PRESENTASI SINKRONISASI TERAKHIR ---
         if st.session_state.get("last_sync_result"):
             res = st.session_state["last_sync_result"]
             st.success(f"✅ Riwayat Sinkronisasi Terakhir (Waktu: {res['waktu']} | File: {res['file_name']})")
@@ -500,15 +499,12 @@ try:
                 st.markdown("#### 🔄 Rincian Data yang Diperbarui")
                 df_report_perubahan = pd.DataFrame(res["list_perubahan"])
                 
-                # --- FITUR FILTER STATUS KHUSUS UNTUK LAPORAN DOWNLOAD ---
                 mask_status = df_report_perubahan["Kolom"].str.lower() == "status"
                 if mask_status.any():
                     opsi_status_dl = sorted(df_report_perubahan[mask_status]["Data Baru"].unique().tolist())
                     filter_status_dl = st.multiselect("🔍 Filter Download: Tampilkan ID yang statusnya berubah menjadi:", opsi_status_dl, default=opsi_status_dl)
                     
-                    # Ambil ID yang statusnya berubah sesuai dengan filter
                     id_valid_status = df_report_perubahan[mask_status & df_report_perubahan["Data Baru"].isin(filter_status_dl)]["ID SPPG"].unique()
-                    # Ambil ID yang tidak mengalami perubahan status sama sekali (misal hanya ganti nama yayasan) agar tetap tampil
                     id_tanpa_perubahan_status = df_report_perubahan[~df_report_perubahan["ID SPPG"].isin(df_report_perubahan[mask_status]["ID SPPG"])]["ID SPPG"].unique()
                     
                     semua_id_valid = list(id_valid_status) + list(id_tanpa_perubahan_status)
@@ -537,9 +533,8 @@ try:
                 st.rerun()
                 
             st.markdown("---")
-        # --------------------------------------------------------
         
-        st.info("Upload file hasil scraping Anda. Sistem akan membandingkannya dengan database saat ini, menambah data baru, dan memperbarui (update) data lama jika terdeteksi ada perubahan.")
+        st.info("Upload file hasil scraping Anda. Sistem akan secara otomatis menyesuaikan nama kolom Excel (seperti 'Nama Yayasan') ke format Database (nama_yayasan).")
         file_upload = st.file_uploader("📂 Pilih File Data (.csv, .xlsx)", type=["csv", "xlsx"])
         
         if file_upload is not None:
@@ -547,11 +542,29 @@ try:
                 if file_upload.name.endswith('.csv'): df_import = pd.read_csv(file_upload)
                 else: df_import = pd.read_excel(file_upload)
                 
+                # KAMUS PENERJEMAH HEADER EXCEL KE DATABASE TURSO
+                kamus_kolom = {
+                    "ID SPPG": "id_sppg",
+                    "Nama Yayasan": "nama_yayasan",
+                    "Status": "status",
+                    "Provinsi": "provinsi",
+                    "Kota/Kabupaten": "kota_kabupaten",
+                    "Kecamatan": "kecamatan",
+                    "Kelurahan/Desa": "kelurahan",
+                    "Luas Tanah": "luas_tanah",
+                    "Luas Dapur": "luas_dapur",
+                    "Kesiapan SPPG": "kesiapan_sppg",
+                    "Waktu Scraping": "waktu_scraping"
+                }
+                
+                # Rename kolom sesuai kamus penerjemah
+                df_import = df_import.rename(columns=kamus_kolom)
+                
                 df_import = df_import.fillna('').astype(str)
                 for col in df_import.columns: df_import[col] = df_import[col].str.strip()
                 
                 if "id_sppg" not in df_import.columns:
-                    st.error("⚠️ Gagal: Kolom 'id_sppg' tidak ditemukan di dalam file Anda.")
+                    st.error("⚠️ Gagal: Kolom 'ID SPPG' atau 'id_sppg' tidak ditemukan di dalam file Anda. Pastikan format header Anda sudah benar.")
                 else:
                     db_indexed = df_master_clean.set_index('id_sppg')
                     file_indexed = df_import.set_index('id_sppg')
