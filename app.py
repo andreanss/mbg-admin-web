@@ -45,7 +45,6 @@ st.markdown("""
 # ==========================================
 PILIHAN_STATUS = ["Proses Persiapan", "Penentuan KA SPPG", "PKS", "Selesai", "Dibatalkan", "Ditolak"]
 
-# FUNGSI AUTO-CORRECTOR STATUS (Mencegah data gaib karena typo/huruf kecil)
 def standarisasi_status(s):
     s_bersih = str(s).strip().lower()
     for p in PILIHAN_STATUS:
@@ -58,9 +57,10 @@ def cek_login():
     if "failed_attempts" not in st.session_state: st.session_state["failed_attempts"] = 0
     if "lockout_until" not in st.session_state: st.session_state["lockout_until"] = None
     
-    if "f_status" not in st.session_state: st.session_state["f_status"] = PILIHAN_STATUS
-    if "j_status" not in st.session_state: st.session_state["j_status"] = PILIHAN_STATUS
-    if "n_status" not in st.session_state: st.session_state["n_status"] = PILIHAN_STATUS
+    # State filter default sekarang DIBUAT KOSONG agar UI bersih
+    if "f_status" not in st.session_state: st.session_state["f_status"] = []
+    if "j_status" not in st.session_state: st.session_state["j_status"] = []
+    if "n_status" not in st.session_state: st.session_state["n_status"] = []
     
     if "trigger_js_tab" not in st.session_state: st.session_state["trigger_js_tab"] = False
     if "prev_search" not in st.session_state: st.session_state["prev_search"] = ""
@@ -233,7 +233,7 @@ def tampilkan_konfirmasi_hapus(list_id):
             st.rerun()
 
 # ==========================================
-# 6. DATA FETCHING (DENGAN AUTO-CORRECTOR)
+# 6. DATA FETCHING
 # ==========================================
 @st.cache_data(ttl=5)
 def ambil_data_master():
@@ -245,7 +245,6 @@ def ambil_data_master():
     df = pd.DataFrame(baris_data, columns=hasil.columns)
     if not df.empty:
         df = df.fillna('').astype(str)
-        # PENERAPAN AUTO-CORRECTOR STATUS DI SINI!
         df['status'] = df['status'].apply(standarisasi_status)
         df['nama_yayasan'] = df['nama_yayasan'].str.strip()
         df['provinsi'] = df['provinsi'].str.strip()
@@ -278,9 +277,9 @@ st.sidebar.caption("Ketik area, nama yayasan, atau ID SPPG untuk memfilter selur
 kata_kunci = st.sidebar.text_input("🔎 Masukkan kata kunci...").strip()
 
 if kata_kunci != st.session_state["prev_search"]:
-    st.session_state["f_status"] = PILIHAN_STATUS
-    st.session_state["j_status"] = PILIHAN_STATUS
-    st.session_state["n_status"] = PILIHAN_STATUS
+    st.session_state["f_status"] = []
+    st.session_state["j_status"] = []
+    st.session_state["n_status"] = []
     st.session_state["prev_search"] = kata_kunci
 
 try:
@@ -330,9 +329,9 @@ try:
             with col3:
                 st.metric("🏢 Total Yayasan Aktif", jml_yayasan)
                 if st.button("Tampilkan Semua Data", use_container_width=True):
-                    st.session_state["f_status"] = PILIHAN_STATUS
-                    st.session_state["j_status"] = PILIHAN_STATUS
-                    st.session_state["n_status"] = PILIHAN_STATUS
+                    st.session_state["f_status"] = []
+                    st.session_state["j_status"] = []
+                    st.session_state["n_status"] = []
                     st.toast("🔄 Filter tabel dikembalikan ke semua status!", icon="🔄")
             
             st.markdown("---")
@@ -385,10 +384,12 @@ try:
         with tab_johan:
             st.subheader("📋 Workbook Dapur SPPG - Style Johan")
             col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
-            j_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, key="j_status")
+            j_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, key="j_status", placeholder="Kosong = Tampil Semua")
             j_sort = col_f2.radio("⬇️ Urutkan Yayasan:", ["A - Z", "Z - A"], horizontal=True, key="j_sort")
             j_sort_isi = col_f3.radio("↕️ Urut Isi Tabel:", ["Default", "Status A-Z"], horizontal=True, key="j_sort_isi")
             st.markdown("---")
+            
+            filter_aktif_j = j_filter_status if j_filter_status else PILIHAN_STATUS
 
             list_provinsi = sorted([str(x) for x in df_master['provinsi'].unique() if str(x) != ''])
             if list_provinsi:
@@ -401,7 +402,7 @@ try:
                 
                 for yayasan in list_yayasan_di_prov:
                     df_yayasan = df_provinsi[df_provinsi['nama_yayasan'] == yayasan]
-                    df_yayasan_filtered = df_yayasan[df_yayasan['status'].isin(j_filter_status)].reset_index(drop=True)
+                    df_yayasan_filtered = df_yayasan[df_yayasan['status'].isin(filter_aktif_j)].reset_index(drop=True)
                     
                     if df_yayasan_filtered.empty: continue
                     if j_sort_isi == "Status A-Z": df_yayasan_filtered = df_yayasan_filtered.sort_values(by="status", ascending=True).reset_index(drop=True)
@@ -426,17 +427,19 @@ try:
             
             with subtab_per_yayasan:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
-                n_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, key="n_status")
+                n_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, key="n_status", placeholder="Kosong = Tampil Semua")
                 n_sort = col_f2.radio("⬇️ Urutkan Yayasan:", ["A - Z", "Z - A"], horizontal=True, key="n_sort")
                 n_sort_isi = col_f3.radio("↕️ Urut Isi Tabel:", ["Default", "Status A-Z"], horizontal=True, key="n_sort_isi")
                 st.markdown("---")
+                
+                filter_aktif_n = n_filter_status if n_filter_status else PILIHAN_STATUS
 
                 list_yayasan_global = sorted([str(x) for x in df_master['nama_yayasan'].unique() if str(x) != ''])
                 if n_sort == "Z - A": list_yayasan_global.reverse()
                 
                 for yay_global in list_yayasan_global:
                     df_yayasan_global = df_master[df_master['nama_yayasan'] == yay_global]
-                    df_yayasan_filtered = df_yayasan_global[df_yayasan_global['status'].isin(n_filter_status)].reset_index(drop=True)
+                    df_yayasan_filtered = df_yayasan_global[df_yayasan_global['status'].isin(filter_aktif_n)].reset_index(drop=True)
                     
                     if df_yayasan_filtered.empty: continue
                     if n_sort_isi == "Status A-Z": df_yayasan_filtered = df_yayasan_filtered.sort_values(by="status", ascending=True).reset_index(drop=True)
@@ -455,12 +458,14 @@ try:
 
             with subtab_seluruhnya:
                 col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
-                flat_filter = col_f1.multiselect("🔍 Status:", PILIHAN_STATUS, key="f_status")
+                flat_filter = col_f1.multiselect("🔍 Status:", PILIHAN_STATUS, key="f_status", placeholder="Kosong = Tampil Semua")
                 flat_sort_col = col_f2.selectbox("⬇️ Urutkan Kolom:", ["ID SPPG", "Nama Yayasan", "Provinsi", "Status"], key="f_sort_col")
                 flat_sort_order = col_f3.radio("Arah:", ["A - Z", "Z - A"], horizontal=True, key="f_sort_order")
                 
+                filter_aktif_f = flat_filter if flat_filter else PILIHAN_STATUS
+                
                 col_map = {"ID SPPG": "id_sppg", "Nama Yayasan": "nama_yayasan", "Provinsi": "provinsi", "Status": "status"}
-                df_flat = df_master[df_master['status'].isin(flat_filter)]
+                df_flat = df_master[df_master['status'].isin(filter_aktif_f)]
                 df_flat = df_flat.sort_values(by=col_map[flat_sort_col], ascending=(flat_sort_order == "A - Z")).reset_index(drop=True)
 
                 key_editor_flat = "edit_normal_flat_view"
@@ -590,7 +595,6 @@ try:
                 df_import = df_import.fillna('').astype(str)
                 for col in df_import.columns: df_import[col] = df_import[col].str.strip()
                 
-                # JIKA ADA KOLOM STATUS, BERSIHKAN FORMATNYA
                 if "status" in df_import.columns:
                     df_import["status"] = df_import["status"].apply(standarisasi_status)
                 
