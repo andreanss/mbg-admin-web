@@ -127,12 +127,31 @@ def inisialisasi_log():
             detail TEXT
         )
     """)
+    # Pembuatan tabel baru untuk mencatat detail perubahan spesifik
+    eksekusi_query("""
+        CREATE TABLE IF NOT EXISTS riwayat_perubahan (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            waktu DATETIME,
+            id_sppg TEXT,
+            kolom TEXT,
+            nilai_lama TEXT,
+            nilai_baru TEXT,
+            admin TEXT
+        )
+    """)
 
 def catat_log(aksi, detail):
     admin = st.session_state.get("admin_email", "Unknown")
     eksekusi_query(
         "INSERT INTO log_aktivitas (waktu, admin, aksi, detail) VALUES (?, ?, ?, ?)",
         [waktu_wib(), admin, aksi, detail]
+    )
+
+def catat_riwayat(id_sppg, kolom, nilai_lama, nilai_baru):
+    admin = st.session_state.get("admin_email", "Unknown")
+    eksekusi_query(
+        "INSERT INTO riwayat_perubahan (waktu, id_sppg, kolom, nilai_lama, nilai_baru, admin) VALUES (?, ?, ?, ?, ?, ?)",
+        [waktu_wib(), id_sppg, kolom, str(nilai_lama), str(nilai_baru), admin]
     )
 
 inisialisasi_log()
@@ -154,8 +173,10 @@ def proses_perubahan_global(key, df_sumber, nama_mode):
         row_data = df_sumber.iloc[int(row_idx)]
         id_sppg = row_data["id_sppg"]
         for col, new_val in changes.items():
+            val_lama = row_data[col]
             eksekusi_query(f"UPDATE master_sppg SET {col} = ? WHERE id_sppg = ?", [new_val, id_sppg])
             catat_log("AUTO-EDIT DATA", f"[{nama_mode}] Mengubah '{col}' menjadi '{new_val}' pada ID SPPG: {id_sppg}")
+            catat_riwayat(id_sppg, col, val_lama, new_val) # Catat ke Laporan
             
     added = state.get("added_rows", {})
     for row in added:
@@ -269,8 +290,8 @@ try:
 
     list_id_sppg = [x for x in df_master['id_sppg'].unique() if x.strip() != ''] if not df_master.empty else []
 
-    tab_eksekutif, tab_johan, tab_normal, tab_alat, tab_import = st.tabs([
-        "📊 Dashboard", "🧑‍💻 Mode Johan", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log", "📥 Import Scraping"
+    tab_eksekutif, tab_johan, tab_normal, tab_alat, tab_import, tab_laporan = st.tabs([
+        "📊 Dashboard", "🧑‍💻 Mode Johan", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log", "📥 Import Scraping", "📈 Laporan Perubahan"
     ])
 
     # --- TAB 1: DASHBOARD ---
@@ -458,8 +479,18 @@ try:
                     if not bulk_ids: st.error("Pilih minimal 1 ID SPPG!")
                     else:
                         placeholders = ", ".join(["?"] * len(bulk_ids))
+                        # Ambil data lama sebelum update
+                        hasil_lama = eksekusi_query(f"SELECT id_sppg, status FROM master_sppg WHERE id_sppg IN ({placeholders})", bulk_ids)
+                        dict_lama = {row[0]: row[1] for row in hasil_lama.rows} if hasil_lama.rows else {}
+                        
                         eksekusi_query(f"UPDATE master_sppg SET status = ? WHERE id_sppg IN ({placeholders})", [bulk_status] + bulk_ids)
                         catat_log("BULK UPDATE STATUS", f"Mengubah {len(bulk_ids)} ID menjadi {bulk_status}")
+                        
+                        for bid in bulk_ids:
+                            lama = str(dict_lama.get(bid, "")).strip()
+                            if lama != bulk_status:
+                                catat_riwayat(bid, "status", lama, bulk_status) # Catat ke Laporan
+                                
                         st.success(f"Berhasil mengupdate {len(bulk_ids)} data dapur!")
                         st.cache_data.clear(); st.rerun()
 
@@ -542,24 +573,13 @@ try:
                 if file_upload.name.endswith('.csv'): df_import = pd.read_csv(file_upload)
                 else: df_import = pd.read_excel(file_upload)
                 
-                # KAMUS PENERJEMAH HEADER EXCEL KE DATABASE TURSO
                 kamus_kolom = {
-                    "ID SPPG": "id_sppg",
-                    "Nama Yayasan": "nama_yayasan",
-                    "Status": "status",
-                    "Provinsi": "provinsi",
-                    "Kota/Kabupaten": "kota_kabupaten",
-                    "Kecamatan": "kecamatan",
-                    "Kelurahan/Desa": "kelurahan",
-                    "Luas Tanah": "luas_tanah",
-                    "Luas Dapur": "luas_dapur",
-                    "Kesiapan SPPG": "kesiapan_sppg",
-                    "Waktu Scraping": "waktu_scraping"
+                    "ID SPPG": "id_sppg", "Nama Yayasan": "nama_yayasan", "Status": "status", "Provinsi": "provinsi",
+                    "Kota/Kabupaten": "kota_kabupaten", "Kecamatan": "kecamatan", "Kelurahan/Desa": "kelurahan",
+                    "Luas Tanah": "luas_tanah", "Luas Dapur": "luas_dapur", "Kesiapan SPPG": "kesiapan_sppg", "Waktu Scraping": "waktu_scraping"
                 }
                 
-                # Rename kolom sesuai kamus penerjemah
                 df_import = df_import.rename(columns=kamus_kolom)
-                
                 df_import = df_import.fillna('').astype(str)
                 for col in df_import.columns: df_import[col] = df_import[col].str.strip()
                 
@@ -638,6 +658,10 @@ try:
                                     query = f"UPDATE master_sppg SET {set_clause} WHERE id_sppg = ?"
                                     eksekusi_query(query, vals + [id_sppg])
                                     sukses_update += 1
+                                    
+                                # Catat ke Laporan Perubahan (Tab 6)
+                                for chg in list_perubahan:
+                                    catat_riwayat(chg["ID SPPG"], chg["Kolom"], chg["Data Lama"], chg["Data Baru"])
                                 
                                 catat_log("SYNC SCRAPING", f"File: {file_upload.name} | Insert: {sukses_insert} | Update: {sukses_update}")
                                 
@@ -657,6 +681,69 @@ try:
                             
             except Exception as e:
                 st.error(f"Terjadi kegagalan saat memproses file: {e}")
+
+    # --- TAB 6: LAPORAN PERUBAHAN (BARU) ---
+    with tab_laporan:
+        st.header("📈 Laporan Perubahan Status")
+        st.info("Menu ini mencatat seluruh riwayat perubahan data secara spesifik, lengkap dengan informasi lokasi dan yayasan untuk kebutuhan presentasi.")
+
+        try:
+            hasil_riwayat = eksekusi_query("SELECT waktu, id_sppg, kolom, nilai_lama, nilai_baru, admin FROM riwayat_perubahan ORDER BY id DESC")
+            if hasil_riwayat.rows:
+                df_riwayat = pd.DataFrame([list(row) for row in hasil_riwayat.rows], columns=["Waktu", "ID SPPG", "Kolom", "Data Lama", "Data Baru", "Admin"])
+                
+                tampilkan_semua = st.checkbox("Tampilkan semua perubahan kolom (Default: Hanya menampilkan perubahan Status)")
+                if not tampilkan_semua:
+                    df_riwayat = df_riwayat[df_riwayat['Kolom'].str.lower() == 'status']
+                
+                if not df_riwayat.empty:
+                    kolom_master = ['id_sppg', 'nama_yayasan', 'provinsi']
+                    if 'kota_kabupaten' in df_master_clean.columns: kolom_master.append('kota_kabupaten')
+                    if 'kecamatan' in df_master_clean.columns: kolom_master.append('kecamatan')
+                    if 'kelurahan' in df_master_clean.columns: kolom_master.append('kelurahan')
+                    
+                    df_master_info = df_master_clean[kolom_master]
+                    df_laporan = pd.merge(df_riwayat, df_master_info, left_on='ID SPPG', right_on='id_sppg', how='left')
+                    
+                    kolom_tampil = ["Waktu", "ID SPPG", "nama_yayasan"]
+                    if 'provinsi' in df_laporan.columns: kolom_tampil.append('provinsi')
+                    if 'kota_kabupaten' in df_laporan.columns: kolom_tampil.append('kota_kabupaten')
+                    if 'kecamatan' in df_laporan.columns: kolom_tampil.append('kecamatan')
+                    if 'kelurahan' in df_laporan.columns: kolom_tampil.append('kelurahan')
+                    kolom_tampil.extend(["Kolom", "Data Lama", "Data Baru", "Admin"])
+                    
+                    df_laporan = df_laporan[kolom_tampil]
+                    
+                    rename_dict = {
+                        "nama_yayasan": "Nama Yayasan",
+                        "provinsi": "Provinsi",
+                        "kota_kabupaten": "Kota/Kabupaten",
+                        "kecamatan": "Kecamatan",
+                        "kelurahan": "Kelurahan/Desa"
+                    }
+                    df_laporan = df_laporan.rename(columns=rename_dict).fillna("-")
+                    
+                    # Filter khusus untuk Download Laporan
+                    opsi_status_laporan = sorted(df_laporan["Data Baru"].unique().tolist())
+                    filter_status_laporan = st.multiselect("🔍 Filter: Tampilkan data yang berubah menjadi:", opsi_status_laporan, default=opsi_status_laporan)
+                    df_laporan_filtered = df_laporan[df_laporan["Data Baru"].isin(filter_status_laporan)]
+                    
+                    st.dataframe(df_laporan_filtered, use_container_width=True)
+                    
+                    excel_laporan = konversi_ke_excel(df_laporan_filtered, sheet_name="Laporan_History")
+                    st.download_button(
+                        label="📥 Download Laporan History ke Excel", 
+                        data=excel_laporan, 
+                        file_name=f"Laporan_History_Perubahan_{datetime.now().strftime('%Y%m%d')}.xlsx", 
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                        key="dl_history_utama"
+                    )
+                else:
+                    st.info("Belum ada riwayat perubahan status yang tercatat.")
+            else:
+                st.info("Belum ada riwayat perubahan di database.")
+        except Exception as e:
+            st.error(f"Gagal memuat laporan: {e}")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem admin: {e}")
