@@ -127,7 +127,6 @@ def inisialisasi_log():
             detail TEXT
         )
     """)
-    # Pembuatan tabel baru untuk mencatat detail perubahan spesifik
     eksekusi_query("""
         CREATE TABLE IF NOT EXISTS riwayat_perubahan (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,7 +175,7 @@ def proses_perubahan_global(key, df_sumber, nama_mode):
             val_lama = row_data[col]
             eksekusi_query(f"UPDATE master_sppg SET {col} = ? WHERE id_sppg = ?", [new_val, id_sppg])
             catat_log("AUTO-EDIT DATA", f"[{nama_mode}] Mengubah '{col}' menjadi '{new_val}' pada ID SPPG: {id_sppg}")
-            catat_riwayat(id_sppg, col, val_lama, new_val) # Catat ke Laporan
+            catat_riwayat(id_sppg, col, val_lama, new_val)
             
     added = state.get("added_rows", {})
     for row in added:
@@ -479,7 +478,6 @@ try:
                     if not bulk_ids: st.error("Pilih minimal 1 ID SPPG!")
                     else:
                         placeholders = ", ".join(["?"] * len(bulk_ids))
-                        # Ambil data lama sebelum update
                         hasil_lama = eksekusi_query(f"SELECT id_sppg, status FROM master_sppg WHERE id_sppg IN ({placeholders})", bulk_ids)
                         dict_lama = {row[0]: row[1] for row in hasil_lama.rows} if hasil_lama.rows else {}
                         
@@ -489,7 +487,7 @@ try:
                         for bid in bulk_ids:
                             lama = str(dict_lama.get(bid, "")).strip()
                             if lama != bulk_status:
-                                catat_riwayat(bid, "status", lama, bulk_status) # Catat ke Laporan
+                                catat_riwayat(bid, "status", lama, bulk_status)
                                 
                         st.success(f"Berhasil mengupdate {len(bulk_ids)} data dapur!")
                         st.cache_data.clear(); st.rerun()
@@ -659,7 +657,6 @@ try:
                                     eksekusi_query(query, vals + [id_sppg])
                                     sukses_update += 1
                                     
-                                # Catat ke Laporan Perubahan (Tab 6)
                                 for chg in list_perubahan:
                                     catat_riwayat(chg["ID SPPG"], chg["Kolom"], chg["Data Lama"], chg["Data Baru"])
                                 
@@ -682,7 +679,7 @@ try:
             except Exception as e:
                 st.error(f"Terjadi kegagalan saat memproses file: {e}")
 
-    # --- TAB 6: LAPORAN PERUBAHAN (BARU) ---
+    # --- TAB 6: LAPORAN PERUBAHAN ---
     with tab_laporan:
         st.header("📈 Laporan Perubahan Status")
         st.info("Menu ini mencatat seluruh riwayat perubahan data secara spesifik, lengkap dengan informasi lokasi dan yayasan untuk kebutuhan presentasi.")
@@ -723,9 +720,16 @@ try:
                     }
                     df_laporan = df_laporan.rename(columns=rename_dict).fillna("-")
                     
-                    # Filter khusus untuk Download Laporan
+                    # --- FITUR BARU: SHORTCUT STATUS DITOLAK ---
+                    hanya_ditolak = st.checkbox("❌ Hanya tampilkan status 'Ditolak'")
+                    
                     opsi_status_laporan = sorted(df_laporan["Data Baru"].unique().tolist())
-                    filter_status_laporan = st.multiselect("🔍 Filter: Tampilkan data yang berubah menjadi:", opsi_status_laporan, default=opsi_status_laporan)
+                    
+                    if hanya_ditolak:
+                        filter_status_laporan = ["Ditolak"]
+                    else:
+                        filter_status_laporan = st.multiselect("🔍 Filter: Tampilkan data yang berubah menjadi:", opsi_status_laporan, default=opsi_status_laporan)
+                    
                     df_laporan_filtered = df_laporan[df_laporan["Data Baru"].isin(filter_status_laporan)]
                     
                     st.dataframe(df_laporan_filtered, use_container_width=True)
