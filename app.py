@@ -67,8 +67,8 @@ def cek_login():
     if "last_sync_result" not in st.session_state: st.session_state["last_sync_result"] = None
 
     if not st.session_state["logged_in"]:
-        st.title("🔒 Gerbang Keamanan MBG")
-        st.write("Silakan masukkan kredensial Anda untuk mengakses database admin.")
+        st.title("EMBEGE")
+        st.write("Login untuk mengakses Dashboard Dapur MBG")
         
         if st.session_state["lockout_until"]:
             if datetime.now() < st.session_state["lockout_until"]:
@@ -85,7 +85,7 @@ def cek_login():
             with st.form("form_login"):
                 username = st.text_input("👤 Username / Email")
                 password = st.text_input("🔑 Password", type="password")
-                submit = st.form_submit_button("Masuk ke Dashboard", use_container_width=True)
+                submit = st.form_submit_button("Masuk", use_container_width=True)
                 
                 if submit:
                     if username in st.secrets["users"] and password == st.secrets["users"][username]:
@@ -422,7 +422,7 @@ try:
 
         # --- TAB 3: MODE NORMAL ---
         with tab_normal:
-            st.subheader("🏠 Mode Manajemen Normal")
+            st.subheader("🏠 Mode Normal")
             subtab_per_yayasan, subtab_seluruhnya = st.tabs(["🏢 Per Yayasan", "🌐 Data Master (Flat View)"])
             
             with subtab_per_yayasan:
@@ -488,7 +488,7 @@ try:
                 st.subheader("🔄 Bulk Edit Status")
                 bulk_ids = st.multiselect("1. Pilih beberapa ID SPPG:", list_id_sppg)
                 bulk_status = st.selectbox("2. Pilih Status Baru:", PILIHAN_STATUS)
-                if st.button("Terapkan Status Massal", type="primary"):
+                if st.button("Apply", type="primary"):
                     if not bulk_ids: st.error("Pilih minimal 1 ID SPPG!")
                     else:
                         placeholders = ", ".join(["?"] * len(bulk_ids))
