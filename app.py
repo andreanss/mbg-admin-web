@@ -45,6 +45,14 @@ st.markdown("""
 # ==========================================
 PILIHAN_STATUS = ["Proses Persiapan", "Penentuan KA SPPG", "PKS", "Selesai", "Dibatalkan", "Ditolak"]
 
+# FUNGSI AUTO-CORRECTOR STATUS (Mencegah data gaib karena typo/huruf kecil)
+def standarisasi_status(s):
+    s_bersih = str(s).strip().lower()
+    for p in PILIHAN_STATUS:
+        if p.lower() == s_bersih:
+            return p
+    return str(s).strip()
+
 def cek_login():
     if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
     if "failed_attempts" not in st.session_state: st.session_state["failed_attempts"] = 0
@@ -225,7 +233,7 @@ def tampilkan_konfirmasi_hapus(list_id):
             st.rerun()
 
 # ==========================================
-# 6. DATA FETCHING
+# 6. DATA FETCHING (DENGAN AUTO-CORRECTOR)
 # ==========================================
 @st.cache_data(ttl=5)
 def ambil_data_master():
@@ -237,7 +245,8 @@ def ambil_data_master():
     df = pd.DataFrame(baris_data, columns=hasil.columns)
     if not df.empty:
         df = df.fillna('').astype(str)
-        df['status'] = df['status'].str.strip()
+        # PENERAPAN AUTO-CORRECTOR STATUS DI SINI!
+        df['status'] = df['status'].apply(standarisasi_status)
         df['nama_yayasan'] = df['nama_yayasan'].str.strip()
         df['provinsi'] = df['provinsi'].str.strip()
     return df
@@ -479,13 +488,13 @@ try:
                     else:
                         placeholders = ", ".join(["?"] * len(bulk_ids))
                         hasil_lama = eksekusi_query(f"SELECT id_sppg, status FROM master_sppg WHERE id_sppg IN ({placeholders})", bulk_ids)
-                        dict_lama = {row[0]: row[1] for row in hasil_lama.rows} if hasil_lama.rows else {}
+                        dict_lama = {row[0]: standarisasi_status(row[1]) for row in hasil_lama.rows} if hasil_lama.rows else {}
                         
                         eksekusi_query(f"UPDATE master_sppg SET status = ? WHERE id_sppg IN ({placeholders})", [bulk_status] + bulk_ids)
                         catat_log("BULK UPDATE STATUS", f"Mengubah {len(bulk_ids)} ID menjadi {bulk_status}")
                         
                         for bid in bulk_ids:
-                            lama = str(dict_lama.get(bid, "")).strip()
+                            lama = dict_lama.get(bid, "")
                             if lama != bulk_status:
                                 catat_riwayat(bid, "status", lama, bulk_status)
                                 
@@ -580,6 +589,10 @@ try:
                 df_import = df_import.rename(columns=kamus_kolom)
                 df_import = df_import.fillna('').astype(str)
                 for col in df_import.columns: df_import[col] = df_import[col].str.strip()
+                
+                # JIKA ADA KOLOM STATUS, BERSIHKAN FORMATNYA
+                if "status" in df_import.columns:
+                    df_import["status"] = df_import["status"].apply(standarisasi_status)
                 
                 if "id_sppg" not in df_import.columns:
                     st.error("⚠️ Gagal: Kolom 'ID SPPG' atau 'id_sppg' tidak ditemukan di dalam file Anda. Pastikan format header Anda sudah benar.")
@@ -720,7 +733,6 @@ try:
                     }
                     df_laporan = df_laporan.rename(columns=rename_dict).fillna("-")
                     
-                    # --- FITUR BARU: SHORTCUT STATUS DITOLAK ---
                     hanya_ditolak = st.checkbox("❌ Hanya tampilkan status 'Ditolak'")
                     
                     opsi_status_laporan = sorted(df_laporan["Data Baru"].unique().tolist())
