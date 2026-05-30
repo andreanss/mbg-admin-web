@@ -194,7 +194,7 @@ def tampilkan_konfirmasi_hapus(list_id):
             for idx in list_id:
                 eksekusi_query("DELETE FROM master_sppg WHERE id_sppg = ?", [idx])
                 catat_log("DELETE DATA", f"Menghapus baris data ID SPPG: {idx}")
-            st.success("Berhasil deleted!")
+            st.success("Berhasil dihapus!")
             del st.session_state["pending_delete_ids"]
             st.cache_data.clear()
             st.rerun()
@@ -487,6 +487,7 @@ try:
     with tab_import:
         st.header("📥 Sinkronisasi Data Hasil Scraping")
         
+        # --- BLOK TAMPILAN PRESENTASI SINKRONISASI TERAKHIR ---
         if st.session_state.get("last_sync_result"):
             res = st.session_state["last_sync_result"]
             st.success(f"✅ Riwayat Sinkronisasi Terakhir (Waktu: {res['waktu']} | File: {res['file_name']})")
@@ -498,10 +499,26 @@ try:
             if res["list_perubahan"]:
                 st.markdown("#### 🔄 Rincian Data yang Diperbarui")
                 df_report_perubahan = pd.DataFrame(res["list_perubahan"])
-                st.dataframe(df_report_perubahan, use_container_width=True)
                 
-                # --- TOMBOL DOWNLOAD EXCEL UNTUK LAPORAN PERUBAHAN ---
-                excel_report_data = konversi_ke_excel(df_report_perubahan, sheet_name="Laporan_Perubahan_Dapur")
+                # --- FITUR FILTER STATUS KHUSUS UNTUK LAPORAN DOWNLOAD ---
+                mask_status = df_report_perubahan["Kolom"].str.lower() == "status"
+                if mask_status.any():
+                    opsi_status_dl = sorted(df_report_perubahan[mask_status]["Data Baru"].unique().tolist())
+                    filter_status_dl = st.multiselect("🔍 Filter Download: Tampilkan ID yang statusnya berubah menjadi:", opsi_status_dl, default=opsi_status_dl)
+                    
+                    # Ambil ID yang statusnya berubah sesuai dengan filter
+                    id_valid_status = df_report_perubahan[mask_status & df_report_perubahan["Data Baru"].isin(filter_status_dl)]["ID SPPG"].unique()
+                    # Ambil ID yang tidak mengalami perubahan status sama sekali (misal hanya ganti nama yayasan) agar tetap tampil
+                    id_tanpa_perubahan_status = df_report_perubahan[~df_report_perubahan["ID SPPG"].isin(df_report_perubahan[mask_status]["ID SPPG"])]["ID SPPG"].unique()
+                    
+                    semua_id_valid = list(id_valid_status) + list(id_tanpa_perubahan_status)
+                    df_report_filtered = df_report_perubahan[df_report_perubahan["ID SPPG"].isin(semua_id_valid)]
+                else:
+                    df_report_filtered = df_report_perubahan
+                
+                st.dataframe(df_report_filtered, use_container_width=True)
+                
+                excel_report_data = konversi_ke_excel(df_report_filtered, sheet_name="Laporan_Perubahan_Dapur")
                 st.download_button(
                     label="📥 Download Laporan Perubahan (Excel)",
                     data=excel_report_data,
@@ -509,7 +526,7 @@ try:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="dl_report_perubahan_sync"
                 )
-                st.write("") # Spasi margin bawah
+                st.write("")
             
             if not res["df_baru"].empty:
                 st.markdown("#### 🆕 Rincian Data Baru yang Ditambahkan")
@@ -520,6 +537,7 @@ try:
                 st.rerun()
                 
             st.markdown("---")
+        # --------------------------------------------------------
         
         st.info("Upload file hasil scraping Anda. Sistem akan membandingkannya dengan database saat ini, menambah data baru, dan memperbarui (update) data lama jika terdeteksi ada perubahan.")
         file_upload = st.file_uploader("📂 Pilih File Data (.csv, .xlsx)", type=["csv", "xlsx"])
