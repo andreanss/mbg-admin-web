@@ -529,6 +529,33 @@ try:
     with tab_import:
         st.header("📥 Sinkronisasi Data Hasil Scraping")
         
+        # --- FITUR PENGINGAT UPDATE (CEK WAKTU > 7 HARI) ---
+        kolom_waktu_db = 'terakhir_update' if 'terakhir_update' in df_master_clean.columns else ('waktu_scraping' if 'waktu_scraping' in df_master_clean.columns else None)
+        
+        if kolom_waktu_db and not df_master_clean.empty:
+            try:
+                df_cek = df_master_clean.copy()
+                df_cek['parsed_waktu'] = pd.to_datetime(df_cek[kolom_waktu_db], errors='coerce')
+                
+                waktu_sekarang = datetime.utcnow() + timedelta(hours=7)
+                tujuh_hari_lalu = waktu_sekarang - timedelta(days=7)
+                
+                mask_lama = df_cek['parsed_waktu'] < tujuh_hari_lalu
+                mask_kosong = df_cek['parsed_waktu'].isna()
+                
+                df_lama = df_cek[mask_lama | mask_kosong]
+                
+                if not df_lama.empty:
+                    with st.expander(f"⚠️ Peringatan: Ada {len(df_lama)} Dapur yang belum diupdate lebih dari 7 hari!"):
+                        st.warning("Data di bawah ini sudah lama tidak disinkronisasi atau belum pernah ada riwayat update. Mohon segera lakukan scraping terbaru untuk wilayah ini.")
+                        kolom_tampil = ['id_sppg', 'nama_yayasan', 'status', kolom_waktu_db]
+                        st.dataframe(df_lama[kolom_tampil].rename(columns={"id_sppg":"ID SPPG", "nama_yayasan":"Nama Yayasan", "status":"Status", kolom_waktu_db:"Terakhir Update"}).reset_index(drop=True), use_container_width=True)
+                else:
+                    st.success("✨ Hebat! Seluruh data dapur di database ini sudah terupdate dalam 7 hari terakhir.")
+            except Exception as e:
+                pass
+        # ----------------------------------------------------
+
         if st.session_state.get("last_sync_result"):
             res = st.session_state["last_sync_result"]
             st.success(f"✅ Riwayat Sinkronisasi Terakhir (Waktu: {res['waktu']} | File: {res['file_name']})")
@@ -541,7 +568,31 @@ try:
             if res["list_perubahan"]:
                 st.markdown("#### 🔄 Rincian Data yang Diperbarui (Perubahan Penting)")
                 df_report_perubahan = pd.DataFrame(res["list_perubahan"])
-                st.dataframe(df_report_perubahan, use_container_width=True)
+                
+                mask_status = df_report_perubahan["Kolom"].str.lower() == "status"
+                if mask_status.any():
+                    opsi_status_dl = sorted(df_report_perubahan[mask_status]["Data Baru"].unique().tolist())
+                    filter_status_dl = st.multiselect("🔍 Filter Download: Tampilkan ID yang statusnya berubah menjadi:", opsi_status_dl, default=opsi_status_dl)
+                    
+                    id_valid_status = df_report_perubahan[mask_status & df_report_perubahan["Data Baru"].isin(filter_status_dl)]["ID SPPG"].unique()
+                    id_tanpa_perubahan_status = df_report_perubahan[~df_report_perubahan["ID SPPG"].isin(df_report_perubahan[mask_status]["ID SPPG"])]["ID SPPG"].unique()
+                    
+                    semua_id_valid = list(id_valid_status) + list(id_tanpa_perubahan_status)
+                    df_report_filtered = df_report_perubahan[df_report_perubahan["ID SPPG"].isin(semua_id_valid)]
+                else:
+                    df_report_filtered = df_report_perubahan
+                
+                st.dataframe(df_report_filtered, use_container_width=True)
+                
+                excel_report_data = konversi_ke_excel(df_report_filtered, sheet_name="Laporan_Perubahan_Dapur")
+                st.download_button(
+                    label="📥 Download Laporan Perubahan (Excel)",
+                    data=excel_report_data,
+                    file_name=f"Laporan_Perubahan_Scraping_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_report_perubahan_sync"
+                )
+                st.write("")
             
             if not res["df_baru"].empty:
                 st.markdown("#### 🆕 Rincian Data Baru yang Ditambahkan")
@@ -605,7 +656,6 @@ try:
                                 if val_lama != val_baru and val_baru != '':
                                     kolom_berubah[col] = val_baru
                                     
-                                    # Pisahkan mana yang perubahan penting, mana yang cuma numpang update waktu
                                     if col.lower() not in kolom_waktu:
                                         perubahan_penting = True
                                         list_perubahan.append({
@@ -643,7 +693,6 @@ try:
                                 sukses_update = 0
                                 sukses_silent = 0
                                 
-                                # EKSEKUSI INSERT
                                 if not df_baru.empty:
                                     kolom_insert = list(df_baru.columns)
                                     for _, row in df_baru.iterrows():
@@ -655,7 +704,6 @@ try:
                                             eksekusi_query(query, nilai_terisi)
                                             sukses_insert += 1
                                             
-                                # EKSEKUSI UPDATE PENTING
                                 for id_sppg, row_changes in query_updates:
                                     cols = list(row_changes.keys())
                                     vals = list(row_changes.values())
@@ -664,7 +712,6 @@ try:
                                     eksekusi_query(query, vals + [id_sppg])
                                     sukses_update += 1
                                     
-                                # EKSEKUSI SILENT UPDATE (Waktu Saja)
                                 for id_sppg, row_changes in query_silent_updates:
                                     cols = list(row_changes.keys())
                                     vals = list(row_changes.values())
@@ -673,7 +720,6 @@ try:
                                     eksekusi_query(query, vals + [id_sppg])
                                     sukses_silent += 1
                                     
-                                # Catat laporan riwayat hanya untuk yang penting
                                 for chg in list_perubahan:
                                     catat_riwayat(chg["ID SPPG"], chg["Kolom"], chg["Data Lama"], chg["Data Baru"])
                                 
