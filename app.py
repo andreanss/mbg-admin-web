@@ -57,7 +57,6 @@ def cek_login():
     if "failed_attempts" not in st.session_state: st.session_state["failed_attempts"] = 0
     if "lockout_until" not in st.session_state: st.session_state["lockout_until"] = None
     
-    # State filter default sekarang DIBUAT KOSONG agar UI bersih
     if "f_status" not in st.session_state: st.session_state["f_status"] = []
     if "j_status" not in st.session_state: st.session_state["j_status"] = []
     if "n_status" not in st.session_state: st.session_state["n_status"] = []
@@ -67,8 +66,8 @@ def cek_login():
     if "last_sync_result" not in st.session_state: st.session_state["last_sync_result"] = None
 
     if not st.session_state["logged_in"]:
-        st.title("EMBEGE")
-        st.write("Login untuk mengakses Dashboard Dapur MBG")
+        st.title("🔒 Gerbang Keamanan MBG")
+        st.write("Silakan masukkan kredensial Anda untuk mengakses database admin.")
         
         if st.session_state["lockout_until"]:
             if datetime.now() < st.session_state["lockout_until"]:
@@ -85,7 +84,7 @@ def cek_login():
             with st.form("form_login"):
                 username = st.text_input("👤 Username / Email")
                 password = st.text_input("🔑 Password", type="password")
-                submit = st.form_submit_button("Masuk", use_container_width=True)
+                submit = st.form_submit_button("Masuk ke Dashboard", use_container_width=True)
                 
                 if submit:
                     if username in st.secrets["users"] and password == st.secrets["users"][username]:
@@ -422,7 +421,7 @@ try:
 
         # --- TAB 3: MODE NORMAL ---
         with tab_normal:
-            st.subheader("🏠 Mode Normal")
+            st.subheader("🏠 Mode Manajemen Normal")
             subtab_per_yayasan, subtab_seluruhnya = st.tabs(["🏢 Per Yayasan", "🌐 Data Master (Flat View)"])
             
             with subtab_per_yayasan:
@@ -488,7 +487,7 @@ try:
                 st.subheader("🔄 Bulk Edit Status")
                 bulk_ids = st.multiselect("1. Pilih beberapa ID SPPG:", list_id_sppg)
                 bulk_status = st.selectbox("2. Pilih Status Baru:", PILIHAN_STATUS)
-                if st.button("Apply", type="primary"):
+                if st.button("Terapkan Status Massal", type="primary"):
                     if not bulk_ids: st.error("Pilih minimal 1 ID SPPG!")
                     else:
                         placeholders = ", ".join(["?"] * len(bulk_ids))
@@ -534,38 +533,15 @@ try:
             res = st.session_state["last_sync_result"]
             st.success(f"✅ Riwayat Sinkronisasi Terakhir (Waktu: {res['waktu']} | File: {res['file_name']})")
             
-            c_sum1, c_sum2 = st.columns(2)
-            c_sum1.metric("🆕 Berhasil Ditambah (Insert)", res["sukses_insert"])
-            c_sum2.metric("🔄 Berhasil Diperbarui (Update)", res["sukses_update"])
+            c_sum1, c_sum2, c_sum3 = st.columns(3)
+            c_sum1.metric("🆕 Berhasil Ditambah", res["sukses_insert"])
+            c_sum2.metric("🔄 Berhasil Diperbarui", res["sukses_update"])
+            c_sum3.metric("⏭️ Update Siluman (Waktu)", res["sukses_silent_update"])
             
             if res["list_perubahan"]:
-                st.markdown("#### 🔄 Rincian Data yang Diperbarui")
+                st.markdown("#### 🔄 Rincian Data yang Diperbarui (Perubahan Penting)")
                 df_report_perubahan = pd.DataFrame(res["list_perubahan"])
-                
-                mask_status = df_report_perubahan["Kolom"].str.lower() == "status"
-                if mask_status.any():
-                    opsi_status_dl = sorted(df_report_perubahan[mask_status]["Data Baru"].unique().tolist())
-                    filter_status_dl = st.multiselect("🔍 Filter Download: Tampilkan ID yang statusnya berubah menjadi:", opsi_status_dl, default=opsi_status_dl)
-                    
-                    id_valid_status = df_report_perubahan[mask_status & df_report_perubahan["Data Baru"].isin(filter_status_dl)]["ID SPPG"].unique()
-                    id_tanpa_perubahan_status = df_report_perubahan[~df_report_perubahan["ID SPPG"].isin(df_report_perubahan[mask_status]["ID SPPG"])]["ID SPPG"].unique()
-                    
-                    semua_id_valid = list(id_valid_status) + list(id_tanpa_perubahan_status)
-                    df_report_filtered = df_report_perubahan[df_report_perubahan["ID SPPG"].isin(semua_id_valid)]
-                else:
-                    df_report_filtered = df_report_perubahan
-                
-                st.dataframe(df_report_filtered, use_container_width=True)
-                
-                excel_report_data = konversi_ke_excel(df_report_filtered, sheet_name="Laporan_Perubahan_Dapur")
-                st.download_button(
-                    label="📥 Download Laporan Perubahan (Excel)",
-                    data=excel_report_data,
-                    file_name=f"Laporan_Perubahan_Scraping_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="dl_report_perubahan_sync"
-                )
-                st.write("")
+                st.dataframe(df_report_perubahan, use_container_width=True)
             
             if not res["df_baru"].empty:
                 st.markdown("#### 🆕 Rincian Data Baru yang Ditambahkan")
@@ -577,7 +553,7 @@ try:
                 
             st.markdown("---")
         
-        st.info("Upload file hasil scraping Anda. Sistem akan secara otomatis menyesuaikan nama kolom Excel (seperti 'Nama Yayasan') ke format Database (nama_yayasan).")
+        st.info("Upload file hasil scraping. Sistem akan secara otomatis: \n1) Menambah data baru.\n2) Mengupdate perubahan penting (Status, Yayasan).\n3) Memperbarui Waktu/Tanggal secara siluman meskipun isinya sama persis.")
         file_upload = st.file_uploader("📂 Pilih File Data (.csv, .xlsx)", type=["csv", "xlsx"])
         
         if file_upload is not None:
@@ -588,7 +564,8 @@ try:
                 kamus_kolom = {
                     "ID SPPG": "id_sppg", "Nama Yayasan": "nama_yayasan", "Status": "status", "Provinsi": "provinsi",
                     "Kota/Kabupaten": "kota_kabupaten", "Kecamatan": "kecamatan", "Kelurahan/Desa": "kelurahan",
-                    "Luas Tanah": "luas_tanah", "Luas Dapur": "luas_dapur", "Kesiapan SPPG": "kesiapan_sppg", "Waktu Scraping": "waktu_scraping"
+                    "Luas Tanah": "luas_tanah", "Luas Dapur": "luas_dapur", "Kesiapan SPPG": "kesiapan_sppg", 
+                    "Waktu Scraping": "waktu_scraping", "Terakhir Update": "terakhir_update"
                 }
                 
                 df_import = df_import.rename(columns=kamus_kolom)
@@ -599,7 +576,7 @@ try:
                     df_import["status"] = df_import["status"].apply(standarisasi_status)
                 
                 if "id_sppg" not in df_import.columns:
-                    st.error("⚠️ Gagal: Kolom 'ID SPPG' atau 'id_sppg' tidak ditemukan di dalam file Anda. Pastikan format header Anda sudah benar.")
+                    st.error("⚠️ Gagal: Kolom 'ID SPPG' tidak ditemukan di dalam file Anda.")
                 else:
                     db_indexed = df_master_clean.set_index('id_sppg')
                     file_indexed = df_import.set_index('id_sppg')
@@ -611,50 +588,62 @@ try:
                     
                     list_perubahan = []
                     query_updates = []
+                    query_silent_updates = []
+                    kolom_waktu = ["waktu_scraping", "terakhir_update"]
                     
                     for id_sppg in id_sama:
                         baris_lama = db_indexed.loc[id_sppg]
                         baris_baru = file_indexed.loc[id_sppg]
                         
                         kolom_berubah = {}
+                        perubahan_penting = False
+                        
                         for col in file_indexed.columns:
                             if col in db_indexed.columns:
                                 val_lama = str(baris_lama[col]).strip()
                                 val_baru = str(baris_baru[col]).strip()
                                 if val_lama != val_baru and val_baru != '':
                                     kolom_berubah[col] = val_baru
-                                    list_perubahan.append({
-                                        "ID SPPG": id_sppg,
-                                        "Kolom": col,
-                                        "Data Lama": val_lama,
-                                        "Data Baru": val_baru
-                                    })
                                     
+                                    # Pisahkan mana yang perubahan penting, mana yang cuma numpang update waktu
+                                    if col.lower() not in kolom_waktu:
+                                        perubahan_penting = True
+                                        list_perubahan.append({
+                                            "ID SPPG": id_sppg,
+                                            "Kolom": col,
+                                            "Data Lama": val_lama,
+                                            "Data Baru": val_baru
+                                        })
+                                        
                         if kolom_berubah:
-                            query_updates.append((id_sppg, kolom_berubah))
+                            if perubahan_penting:
+                                query_updates.append((id_sppg, kolom_berubah))
+                            else:
+                                query_silent_updates.append((id_sppg, kolom_berubah))
                     
                     st.subheader("📊 Preview Rencana Sinkronisasi")
                     c1, c2, c3 = st.columns(3)
                     c1.metric("🆕 Data Baru (Akan Ditambah)", len(df_baru))
                     c2.metric("🔄 Data Berubah (Akan Diupdate)", len(query_updates))
-                    c3.metric("⏭️ Data Sama (Dilewati)", len(id_sama) - len(query_updates))
+                    c3.metric("⏭️ Data Sama (Waktu Diupdate Siluman)", len(query_silent_updates))
                     
                     if list_perubahan:
-                        st.markdown("#### 🔄 Preview Data yang Akan Diupdate")
+                        st.markdown("#### 🔄 Preview Data yang Akan Diupdate (Perubahan Penting)")
                         st.dataframe(pd.DataFrame(list_perubahan), use_container_width=True)
                         
                     if not df_baru.empty:
                         st.markdown("#### 🆕 Preview Data Baru yang Akan Ditambah")
                         st.dataframe(df_baru.head(10), use_container_width=True)
-                        if len(df_baru) > 10: st.caption(f"...dan {len(df_baru)-10} baris lainnya.")
 
-                    if len(df_baru) > 0 or len(query_updates) > 0:
+                    if len(df_baru) > 0 or len(query_updates) > 0 or len(query_silent_updates) > 0:
                         st.warning("⚠️ Pastikan preview perubahan di atas sudah benar sebelum mengeksekusi.")
                         if st.button("🚀 Eksekusi Sinkronisasi ke Database", type="primary", use_container_width=True):
                             with st.spinner("⏳ Menulis perubahan ke server Turso..."):
                                 sukses_insert = 0
                                 sukses_update = 0
+                                sukses_silent = 0
                                 
+                                # EKSEKUSI INSERT
                                 if not df_baru.empty:
                                     kolom_insert = list(df_baru.columns)
                                     for _, row in df_baru.iterrows():
@@ -666,6 +655,7 @@ try:
                                             eksekusi_query(query, nilai_terisi)
                                             sukses_insert += 1
                                             
+                                # EKSEKUSI UPDATE PENTING
                                 for id_sppg, row_changes in query_updates:
                                     cols = list(row_changes.keys())
                                     vals = list(row_changes.values())
@@ -674,10 +664,20 @@ try:
                                     eksekusi_query(query, vals + [id_sppg])
                                     sukses_update += 1
                                     
+                                # EKSEKUSI SILENT UPDATE (Waktu Saja)
+                                for id_sppg, row_changes in query_silent_updates:
+                                    cols = list(row_changes.keys())
+                                    vals = list(row_changes.values())
+                                    set_clause = ", ".join([f"{c} = ?" for c in cols])
+                                    query = f"UPDATE master_sppg SET {set_clause} WHERE id_sppg = ?"
+                                    eksekusi_query(query, vals + [id_sppg])
+                                    sukses_silent += 1
+                                    
+                                # Catat laporan riwayat hanya untuk yang penting
                                 for chg in list_perubahan:
                                     catat_riwayat(chg["ID SPPG"], chg["Kolom"], chg["Data Lama"], chg["Data Baru"])
                                 
-                                catat_log("SYNC SCRAPING", f"File: {file_upload.name} | Insert: {sukses_insert} | Update: {sukses_update}")
+                                catat_log("SYNC SCRAPING", f"File: {file_upload.name} | Ins: {sukses_insert} | Upd: {sukses_update} | Silent: {sukses_silent}")
                                 
                                 st.session_state["last_sync_result"] = {
                                     "waktu": waktu_wib(),
@@ -685,13 +685,14 @@ try:
                                     "df_baru": df_baru,
                                     "list_perubahan": list_perubahan,
                                     "sukses_insert": sukses_insert,
-                                    "sukses_update": sukses_update
+                                    "sukses_update": sukses_update,
+                                    "sukses_silent_update": sukses_silent
                                 }
                                 
                                 st.cache_data.clear()
                                 st.rerun()
                     else:
-                        st.info("✨ Seluruh isi file CSV/Excel ini sudah sama persis dengan database. Tidak ada yang perlu di-sinkronisasi.")
+                        st.info("✨ Seluruh isi file CSV/Excel dan jam-nya sudah sama persis dengan database. Tidak ada yang perlu di-sinkronisasi.")
                             
             except Exception as e:
                 st.error(f"Terjadi kegagalan saat memproses file: {e}")
