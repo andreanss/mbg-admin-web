@@ -244,9 +244,12 @@ def ambil_data_master():
     df = pd.DataFrame(baris_data, columns=hasil.columns)
     if not df.empty:
         df = df.fillna('').astype(str)
-        df['status'] = df['status'].apply(standarisasi_status)
-        df['nama_yayasan'] = df['nama_yayasan'].str.strip()
-        df['provinsi'] = df['provinsi'].str.strip()
+        if 'status' in df.columns:
+            df['status'] = df['status'].apply(standarisasi_status)
+        if 'nama_yayasan' in df.columns:
+            df['nama_yayasan'] = df['nama_yayasan'].str.strip()
+        if 'provinsi' in df.columns:
+            df['provinsi'] = df['provinsi'].str.strip()
     return df
 
 @st.cache_data(ttl=5)
@@ -375,6 +378,36 @@ try:
                     st.dataframe(df_prov_stat, use_container_width=True)
                 else:
                     st.info("Belum ada data dengan status tersebut di pencarian ini.")
+
+            # --- FITUR BARU: UMUR SCRAPING DI DASHBOARD ---
+            st.markdown("---")
+            st.subheader("⏱️ Status Pembaruan Data (Scraping)")
+            
+            kolom_waktu = None
+            if 'terakhir_update' in df_master.columns:
+                kolom_waktu = 'terakhir_update'
+            elif 'waktu_scraping' in df_master.columns:
+                kolom_waktu = 'waktu_scraping'
+                
+            if kolom_waktu:
+                try:
+                    waktu_parsed = pd.to_datetime(df_master[kolom_waktu], errors='coerce')
+                    waktu_valid = waktu_parsed.dropna()
+                    
+                    if not waktu_valid.empty:
+                        waktu_terbaru = waktu_valid.max().strftime("%d %B %Y, %H:%M WIB")
+                        waktu_terlama = waktu_valid.min().strftime("%d %B %Y, %H:%M WIB")
+                        
+                        c_waktu1, c_waktu2 = st.columns(2)
+                        c_waktu1.info(f"🆕 **Scraping Terbaru:** {waktu_terbaru}")
+                        c_waktu2.warning(f"🕰️ **Scraping Terlama:** {waktu_terlama}")
+                    else:
+                        st.caption("Belum ada data waktu scraping yang valid tercatat di pencarian ini.")
+                except Exception:
+                    pass
+            else:
+                st.caption("Kolom waktu update belum tersedia di database.")
+
         else:
             st.warning("Data tidak ditemukan atau Database Turso kosong.")
 
@@ -529,7 +562,6 @@ try:
     with tab_import:
         st.header("📥 Sinkronisasi Data Hasil Scraping")
         
-        # --- FITUR PENGINGAT UPDATE (CEK WAKTU > 7 HARI) ---
         kolom_waktu_db = 'terakhir_update' if 'terakhir_update' in df_master_clean.columns else ('waktu_scraping' if 'waktu_scraping' in df_master_clean.columns else None)
         
         if kolom_waktu_db and not df_master_clean.empty:
@@ -554,7 +586,6 @@ try:
                     st.success("✨ Hebat! Seluruh data dapur di database ini sudah terupdate dalam 7 hari terakhir.")
             except Exception as e:
                 pass
-        # ----------------------------------------------------
 
         if st.session_state.get("last_sync_result"):
             res = st.session_state["last_sync_result"]
