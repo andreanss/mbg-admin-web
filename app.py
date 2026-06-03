@@ -300,7 +300,7 @@ try:
     list_id_sppg = [x for x in df_master['id_sppg'].unique() if x.strip() != ''] if not df_master.empty else []
 
     tab_eksekutif, tab_johan, tab_normal, tab_alat, tab_import, tab_laporan = st.tabs([
-        "📊 Dashboard", "🧑‍💻 Mode Johan", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log", "📥 Import Scraping", "📈 Laporan Perubahan"
+        "📊 Dashboard", "🧑‍💻 Mode Per Provinsi", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log", "📥 Import Scraping", "📈 Laporan Perubahan"
     ])
 
     # --- TAB 1: DASHBOARD ---
