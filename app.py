@@ -414,7 +414,7 @@ try:
     if not df_master.empty:
         # --- TAB 2: MODE JOHAN ---
         with tab_johan:
-            st.subheader("📋 Workbook Dapur SPPG - Style Johan")
+            st.subheader("📋 Workbook Dapur SPPG Per Provinsi Per Yayasan")
             col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
             j_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, key="j_status", placeholder="Kosong = Tampil Semua")
             j_sort = col_f2.radio("⬇️ Urutkan Yayasan:", ["A - Z", "Z - A"], horizontal=True, key="j_sort")
