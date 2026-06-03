@@ -44,6 +44,7 @@ st.markdown("""
 # 2. SISTEM KEAMANAN & ANTI-HACKING
 # ==========================================
 PILIHAN_STATUS = ["Proses Persiapan", "Penentuan KA SPPG", "PKS", "Selesai", "Dibatalkan", "Ditolak"]
+PILIHAN_PERSENTASE = [str(i) for i in range(0, 110, 10)] # Menghasilkan ["0", "10", "20", ... "100"]
 
 def standarisasi_status(s):
     s_bersih = str(s).strip().lower()
@@ -51,6 +52,12 @@ def standarisasi_status(s):
         if p.lower() == s_bersih:
             return p
     return str(s).strip()
+
+def standarisasi_persentase(p):
+    p_str = str(p).replace(".0", "").replace("%", "").strip()
+    if p_str in PILIHAN_PERSENTASE:
+        return p_str
+    return "0"
 
 def cek_login():
     if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
@@ -145,6 +152,12 @@ def inisialisasi_log():
             admin TEXT
         )
     """)
+    
+    # --- AUTO-MIGRASI DATABASE: Menambahkan kolom persentase jika belum ada ---
+    try:
+        eksekusi_query("ALTER TABLE master_sppg ADD COLUMN persentase TEXT DEFAULT '0'")
+    except Exception:
+        pass # Jika error, berarti kolom sudah berhasil ditambahkan sebelumnya. Aman!
 
 def catat_log(aksi, detail):
     admin = st.session_state.get("admin_email", "Unknown")
@@ -244,12 +257,27 @@ def ambil_data_master():
     df = pd.DataFrame(baris_data, columns=hasil.columns)
     if not df.empty:
         df = df.fillna('').astype(str)
+        
+        # --- PEMBERSIHAN DATA DAN AUTO-KOREKSI ---
         if 'status' in df.columns:
             df['status'] = df['status'].apply(standarisasi_status)
+        if 'persentase' in df.columns:
+            df['persentase'] = df['persentase'].apply(standarisasi_persentase)
+        else:
+            df['persentase'] = '0' # Jaga-jaga jika sinkronisasi awal
+            
         if 'nama_yayasan' in df.columns:
             df['nama_yayasan'] = df['nama_yayasan'].str.strip()
         if 'provinsi' in df.columns:
             df['provinsi'] = df['provinsi'].str.strip()
+            
+        # --- MENGURUTKAN KOLOM AGAR PERSENTASE DI TENGAH ---
+        cols = df.columns.tolist()
+        front_cols = ['id_sppg', 'persentase', 'status']
+        front_cols = [c for c in front_cols if c in cols] # Filter kolom yg benar-benar ada
+        other_cols = [c for c in cols if c not in front_cols]
+        df = df[front_cols + other_cols]
+        
     return df
 
 @st.cache_data(ttl=5)
@@ -300,7 +328,7 @@ try:
     list_id_sppg = [x for x in df_master['id_sppg'].unique() if x.strip() != ''] if not df_master.empty else []
 
     tab_eksekutif, tab_johan, tab_normal, tab_alat, tab_import, tab_laporan = st.tabs([
-        "📊 Dashboard", "🧑‍💻 Mode Per Provinsi", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log", "📥 Import Scraping", "📈 Laporan Perubahan"
+        "📊 Dashboard", "🧑‍💻 Mode Johan", "🏠 Mode Normal", "🛠️ Bulk Edit dan Log", "📥 Import Scraping", "📈 Laporan Perubahan"
     ])
 
     # --- TAB 1: DASHBOARD ---
@@ -379,7 +407,6 @@ try:
                 else:
                     st.info("Belum ada data dengan status tersebut di pencarian ini.")
 
-            # --- FITUR BARU: UMUR SCRAPING DI DASHBOARD ---
             st.markdown("---")
             st.subheader("⏱️ Status Pembaruan Data (Scraping)")
             
@@ -414,7 +441,7 @@ try:
     if not df_master.empty:
         # --- TAB 2: MODE JOHAN ---
         with tab_johan:
-            st.subheader("📋 Workbook Dapur SPPG Per Provinsi Per Yayasan")
+            st.subheader("📋 Workbook Dapur SPPG - Style Johan")
             col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
             j_filter_status = col_f1.multiselect("🔍 Tampilkan Status:", PILIHAN_STATUS, key="j_status", placeholder="Kosong = Tampil Semua")
             j_sort = col_f2.radio("⬇️ Urutkan Yayasan:", ["A - Z", "Z - A"], horizontal=True, key="j_sort")
@@ -444,8 +471,11 @@ try:
                     with st.expander(f"🏢 {yayasan} ({len(df_yayasan_filtered)} ditampilkan dari {total_dapur} total)"):
                         st.data_editor(
                             df_yayasan_filtered,
-                            column_config={"id_sppg": st.column_config.TextColumn("ID SPPG", disabled=True),
-                                           "status": st.column_config.SelectboxColumn("Status", options=PILIHAN_STATUS, required=True)},
+                            column_config={
+                                "id_sppg": st.column_config.TextColumn("ID SPPG", disabled=True),
+                                "persentase": st.column_config.SelectboxColumn("Persentase (%)", options=PILIHAN_PERSENTASE, required=True),
+                                "status": st.column_config.SelectboxColumn("Status", options=PILIHAN_STATUS, required=True)
+                            },
                             use_container_width=True, num_rows="dynamic", key=key_editor,
                             on_change=proses_perubahan_global, args=(key_editor, df_yayasan_filtered, "MODE JOHAN")
                         )
@@ -480,8 +510,11 @@ try:
                     with st.expander(f"🏢 {yay_global} ({len(df_yayasan_filtered)} ditampilkan)"):
                         st.data_editor(
                             df_yayasan_filtered,
-                            column_config={"id_sppg": st.column_config.TextColumn("ID SPPG", disabled=True),
-                                           "status": st.column_config.SelectboxColumn("Status", options=PILIHAN_STATUS, required=True)},
+                            column_config={
+                                "id_sppg": st.column_config.TextColumn("ID SPPG", disabled=True),
+                                "persentase": st.column_config.SelectboxColumn("Persentase (%)", options=PILIHAN_PERSENTASE, required=True),
+                                "status": st.column_config.SelectboxColumn("Status", options=PILIHAN_STATUS, required=True)
+                            },
                             use_container_width=True, num_rows="dynamic", key=key_editor_normal,
                             on_change=proses_perubahan_global, args=(key_editor_normal, df_yayasan_filtered, "NORMAL PER YAYASAN")
                         )
@@ -503,8 +536,11 @@ try:
                 key_editor_flat = "edit_normal_flat_view"
                 st.data_editor(
                     df_flat,
-                    column_config={"id_sppg": st.column_config.TextColumn("ID SPPG", disabled=False),
-                                   "status": st.column_config.SelectboxColumn("Status", options=PILIHAN_STATUS, required=True)},
+                    column_config={
+                        "id_sppg": st.column_config.TextColumn("ID SPPG", disabled=False),
+                        "persentase": st.column_config.SelectboxColumn("Persentase (%)", options=PILIHAN_PERSENTASE, required=True),
+                        "status": st.column_config.SelectboxColumn("Status", options=PILIHAN_STATUS, required=True)
+                    },
                     use_container_width=True, height=500, num_rows="dynamic", key=key_editor_flat,
                     on_change=proses_perubahan_global, args=(key_editor_flat, df_flat, "NORMAL FLAT VIEW")
                 )
@@ -635,7 +671,7 @@ try:
                 
             st.markdown("---")
         
-        st.info("Upload file hasil scraping. Sistem akan secara otomatis: \n1) Menambah data baru.\n2) Mengupdate perubahan penting (Status, Yayasan).\n3) Memperbarui Waktu/Tanggal secara siluman meskipun isinya sama persis.")
+        st.info("Upload file hasil scraping. Sistem akan secara otomatis: \n1) Menambah data baru.\n2) Mengupdate perubahan penting (Status, Yayasan, Persentase).\n3) Memperbarui Waktu/Tanggal secara siluman meskipun isinya sama persis.")
         file_upload = st.file_uploader("📂 Pilih File Data (.csv, .xlsx)", type=["csv", "xlsx"])
         
         if file_upload is not None:
@@ -644,8 +680,8 @@ try:
                 else: df_import = pd.read_excel(file_upload)
                 
                 kamus_kolom = {
-                    "ID SPPG": "id_sppg", "Nama Yayasan": "nama_yayasan", "Status": "status", "Provinsi": "provinsi",
-                    "Kota/Kabupaten": "kota_kabupaten", "Kecamatan": "kecamatan", "Kelurahan/Desa": "kelurahan",
+                    "ID SPPG": "id_sppg", "Nama Yayasan": "nama_yayasan", "Status": "status", "Persentase": "persentase",
+                    "Provinsi": "provinsi", "Kota/Kabupaten": "kota_kabupaten", "Kecamatan": "kecamatan", "Kelurahan/Desa": "kelurahan",
                     "Luas Tanah": "luas_tanah", "Luas Dapur": "luas_dapur", "Kesiapan SPPG": "kesiapan_sppg", 
                     "Waktu Scraping": "waktu_scraping", "Terakhir Update": "terakhir_update"
                 }
@@ -656,6 +692,8 @@ try:
                 
                 if "status" in df_import.columns:
                     df_import["status"] = df_import["status"].apply(standarisasi_status)
+                if "persentase" in df_import.columns:
+                    df_import["persentase"] = df_import["persentase"].apply(standarisasi_persentase)
                 
                 if "id_sppg" not in df_import.columns:
                     st.error("⚠️ Gagal: Kolom 'ID SPPG' tidak ditemukan di dalam file Anda.")
@@ -784,9 +822,9 @@ try:
             if hasil_riwayat.rows:
                 df_riwayat = pd.DataFrame([list(row) for row in hasil_riwayat.rows], columns=["Waktu", "ID SPPG", "Kolom", "Data Lama", "Data Baru", "Admin"])
                 
-                tampilkan_semua = st.checkbox("Tampilkan semua perubahan kolom (Default: Hanya menampilkan perubahan Status)")
+                tampilkan_semua = st.checkbox("Tampilkan semua perubahan kolom (Default: Hanya menampilkan perubahan Status dan Persentase)")
                 if not tampilkan_semua:
-                    df_riwayat = df_riwayat[df_riwayat['Kolom'].str.lower() == 'status']
+                    df_riwayat = df_riwayat[df_riwayat['Kolom'].str.lower().isin(['status', 'persentase'])]
                 
                 if not df_riwayat.empty:
                     kolom_master = ['id_sppg', 'nama_yayasan', 'provinsi']
@@ -837,7 +875,7 @@ try:
                         key="dl_history_utama"
                     )
                 else:
-                    st.info("Belum ada riwayat perubahan status yang tercatat.")
+                    st.info("Belum ada riwayat perubahan status atau persentase yang tercatat.")
             else:
                 st.info("Belum ada riwayat perubahan di database.")
         except Exception as e:
