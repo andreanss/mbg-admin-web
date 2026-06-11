@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # ==========================================
 # 1. KONFIGURASI HALAMAN WEB
 # ==========================================
-st.set_page_config(page_title="LEUIT JAYA JAYA JAYA!", page_icon="🍲", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Lesgow", page_icon="🍲", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -291,7 +291,7 @@ def ambil_data_log():
 # ==========================================
 col_title, col_logout = st.columns([8.5, 1.5])
 with col_title:
-    st.title("🎛️ Dapur MBG - LEUIT GROUP")
+    st.title("🎛️ kisyen")
 with col_logout:
     st.write("")
     with st.popover("⚙️ Setting", use_container_width=True):
