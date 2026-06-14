@@ -363,6 +363,7 @@ try:
             st.markdown("---")
             col_dash1, col_dash2 = st.columns(2)
             
+            # FITUR DASHBOARD YANG MEMUAT DAFTAR YAYASAN DAN JUMLAH DAPURNYA
             with col_dash1:
                 st.subheader("🏢 Rincian Dapur per Yayasan")
                 semua_yayasan = df_master[df_master['nama_yayasan'] != '']['nama_yayasan'].unique()
