@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # ==========================================
 # 1. KONFIGURASI HALAMAN WEB
 # ==========================================
-st.set_page_config(page_title="Lesgow", page_icon="🍲", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="LEUIT JAYA JAYA JAYA!", page_icon="🍲", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -44,7 +44,7 @@ st.markdown("""
 # 2. SISTEM KEAMANAN & ANTI-HACKING
 # ==========================================
 PILIHAN_STATUS = ["Proses Persiapan", "Penentuan KA SPPG", "PKS", "Selesai", "Dibatalkan", "Ditolak"]
-PILIHAN_PERSENTASE = [str(i) for i in range(0, 110, 10)] # Menghasilkan ["0", "10", "20", ... "100"]
+PILIHAN_PERSENTASE = [str(i) for i in range(0, 110, 10)]
 
 def standarisasi_status(s):
     s_bersih = str(s).strip().lower()
@@ -153,11 +153,10 @@ def inisialisasi_log():
         )
     """)
     
-    # --- AUTO-MIGRASI DATABASE: Menambahkan kolom persentase jika belum ada ---
     try:
         eksekusi_query("ALTER TABLE master_sppg ADD COLUMN persentase TEXT DEFAULT '0'")
     except Exception:
-        pass # Jika error, berarti kolom sudah berhasil ditambahkan sebelumnya. Aman!
+        pass 
 
 def catat_log(aksi, detail):
     admin = st.session_state.get("admin_email", "Unknown")
@@ -257,24 +256,21 @@ def ambil_data_master():
     df = pd.DataFrame(baris_data, columns=hasil.columns)
     if not df.empty:
         df = df.fillna('').astype(str)
-        
-        # --- PEMBERSIHAN DATA DAN AUTO-KOREKSI ---
         if 'status' in df.columns:
             df['status'] = df['status'].apply(standarisasi_status)
         if 'persentase' in df.columns:
             df['persentase'] = df['persentase'].apply(standarisasi_persentase)
         else:
-            df['persentase'] = '0' # Jaga-jaga jika sinkronisasi awal
+            df['persentase'] = '0'
             
         if 'nama_yayasan' in df.columns:
             df['nama_yayasan'] = df['nama_yayasan'].str.strip()
         if 'provinsi' in df.columns:
             df['provinsi'] = df['provinsi'].str.strip()
             
-        # --- MENGURUTKAN KOLOM AGAR PERSENTASE DI TENGAH ---
         cols = df.columns.tolist()
         front_cols = ['id_sppg', 'persentase', 'status']
-        front_cols = [c for c in front_cols if c in cols] # Filter kolom yg benar-benar ada
+        front_cols = [c for c in front_cols if c in cols]
         other_cols = [c for c in cols if c not in front_cols]
         df = df[front_cols + other_cols]
         
@@ -291,7 +287,7 @@ def ambil_data_log():
 # ==========================================
 col_title, col_logout = st.columns([8.5, 1.5])
 with col_title:
-    st.title("🎛️ kisyen")
+    st.title("🎛️ Dapur MBG - LEUIT GROUP")
 with col_logout:
     st.write("")
     with st.popover("⚙️ Setting", use_container_width=True):
@@ -368,23 +364,26 @@ try:
             col_dash1, col_dash2 = st.columns(2)
             
             with col_dash1:
-                st.subheader("🏢 Sisa Slot Yayasan (Terbanyak)")
+                st.subheader("🏢 Rincian Dapur per Yayasan")
                 semua_yayasan = df_master[df_master['nama_yayasan'] != '']['nama_yayasan'].unique()
                 df_active = df_master[~df_master['status'].str.lower().isin(['dibatalkan', 'ditolak'])]
                 terisi_dict = df_active['nama_yayasan'].value_counts().to_dict()
                 
-                data_slot = []
+                data_yayasan = []
                 for y in semua_yayasan:
                     terisi = terisi_dict.get(y, 0)
-                    sisa = 10 - terisi
-                    if sisa > 0:
-                        data_slot.append({"Nama Yayasan": y, "Sisa Slot Kosong": sisa})
+                    sisa = 10 - terisi if (10 - terisi) > 0 else 0
+                    data_yayasan.append({
+                        "Nama Yayasan": y, 
+                        "Jumlah Dapur": terisi,
+                        "Sisa Slot": sisa
+                    })
                 
-                if data_slot:
-                    df_slots = pd.DataFrame(data_slot).sort_values(by='Sisa Slot Kosong', ascending=False).reset_index(drop=True)
-                    st.dataframe(df_slots, use_container_width=True)
+                if data_yayasan:
+                    df_yayasan_dash = pd.DataFrame(data_yayasan).sort_values(by='Jumlah Dapur', ascending=False).reset_index(drop=True)
+                    st.dataframe(df_yayasan_dash, use_container_width=True)
                 else:
-                    st.success("Semua yayasan pada pencarian ini sudah terisi penuh (10 slot).")
+                    st.info("Belum ada data yayasan pada pencarian ini.")
 
             with col_dash2:
                 st.subheader("📍 Rincian Status per Provinsi")
